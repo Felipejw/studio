@@ -1,6 +1,19 @@
+
 // src/lib/firebase.ts
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, getDocs, query, where, doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
+import { 
+  getFirestore, 
+  collection, 
+  addDoc, 
+  getDocs, 
+  query, 
+  where, 
+  doc, 
+  setDoc, 
+  getDoc, 
+  updateDoc, 
+  orderBy // Ensure orderBy is imported from firebase/firestore
+} from 'firebase/firestore';
 // import { getAuth } from 'firebase/auth'; // Import when auth is needed
 
 const firebaseConfig = {
@@ -32,7 +45,8 @@ export {
   doc,
   setDoc,
   getDoc,
-  updateDoc
+  updateDoc,
+  orderBy // Ensure orderBy is exported
 };
 
 // Note: You'll need to create a .env.local file in your project root 
