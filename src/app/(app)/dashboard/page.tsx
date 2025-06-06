@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { PlusCircle, FileText, ScanLine, AlertTriangle, TrendingUp, Smile, BarChart, Loader2, DollarSign, Percent, Lightbulb, LineChartIcon, CalendarIcon, Clock, Tag, CheckCircle, XCircle } from 'lucide-react';
+import { Percent, FileText, ScanLine, AlertTriangle, TrendingUp, Smile, BarChart, Loader2, DollarSign, Lightbulb, LineChartIcon, CalendarIcon, Clock, Tag, CheckCircle, XCircle } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/components/auth-provider';
 import { ResponsiveContainer, LineChart as RechartsLineChart, XAxis, YAxis, Tooltip as RechartsTooltip, Line as RechartsLine, CartesianGrid, BarChart as RechartsBarChart, Bar as RechartsBar, Cell } from 'recharts';
@@ -16,6 +16,7 @@ import { ptBR } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
+import { useDashboardHeader } from '@/contexts/dashboard-header-context';
 
 interface TradeEntryFirestore {
   userId: string;
@@ -63,9 +64,9 @@ const chartConfig = {
 
 export default function DashboardPage() {
   const { user, userId } = useAuth();
+  const { setDailyResult, setIsLoadingDailyResult } = useDashboardHeader();
 
   const [isLoading, setIsLoading] = useState(true);
-  // const [dailyPlanExists, setDailyPlanExists] = useState<boolean | null>(null); // Removed dailyPlanExists state
   
   const [allTrades, setAllTrades] = useState<TradeEntry[]>([]);
   const [riskSettings, setRiskSettings] = useState<RiskSettings | null>(null);
@@ -77,6 +78,7 @@ export default function DashboardPage() {
   const [averageEmotionForPeriod, setAverageEmotionForPeriod] = useState<string | null>(null);
   const [mostTradedAssetForPeriod, setMostTradedAssetForPeriod] = useState<string>("N/A");
   const [mostTradedPeriodForPeriod, setMostTradedPeriodForPeriod] = useState<string>("N/A");
+  const [winRateForPeriod, setWinRateForPeriod] = useState(0);
 
   // States for metrics based on last 7 days (performance)
   const [winRate7Days, setWinRate7Days] = useState(0);
@@ -86,7 +88,7 @@ export default function DashboardPage() {
   const [losingTrades7DaysCount, setLosingTrades7DaysCount] = useState(0);
   
   const [lossLimitReached, setLossLimitReached] = useState(false);
-  const [tradingOutsideHours, setTradingOutsideHours] = useState(false); // Kept for future use
+  const [tradingOutsideHours, setTradingOutsideHours] = useState(false); 
 
   useEffect(() => {
     if (!userId) {
@@ -98,17 +100,21 @@ export default function DashboardPage() {
         setAverageEmotionForPeriod("N/A");
         setMostTradedAssetForPeriod("N/A");
         setMostTradedPeriodForPeriod("N/A");
+        setWinRateForPeriod(0);
         setWinRate7Days(0);
         setAvgRiskReward7Days("N/A");
         setWeeklyPLChartData(initialWeeklyPLDataTemplate);
         setWinningTrades7DaysCount(0);
         setLosingTrades7DaysCount(0);
         setLossLimitReached(false);
+        setIsLoadingDailyResult(false);
+        setDailyResult(0);
         return;
     }
 
     const fetchDashboardData = async () => {
       setIsLoading(true);
+      setIsLoadingDailyResult(true);
       try {
         const today = new Date();
         const sevenDaysAgo = subDays(startOfWeek(today, { locale: ptBR }), 1); 
@@ -141,7 +147,6 @@ export default function DashboardPage() {
             setRiskSettings(null);
         }
         
-        // setDailyPlanExists(false); // Removed, no longer used for alert
         setTradingOutsideHours(false);
 
       } catch (error) {
@@ -150,13 +155,18 @@ export default function DashboardPage() {
         setRiskSettings(null);
       } finally {
         setIsLoading(false);
+        setIsLoadingDailyResult(false);
       }
     };
     fetchDashboardData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading) {
+        setIsLoadingDailyResult(true);
+        return;
+    }
 
     const today = new Date();
     const periodDate = selectedDate || today;
@@ -171,6 +181,21 @@ export default function DashboardPage() {
     setTradesForPeriodCount(tradesForSelectedPeriod.length);
     const plForPeriod = tradesForSelectedPeriod.reduce((sum, trade) => sum + trade.profit, 0);
     setProfitOrLossForPeriod(plForPeriod);
+    
+    // Update context for AppHeader
+    if (!selectedDate || format(selectedDate, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd')) {
+      setDailyResult(plForPeriod);
+    } else if (selectedDate) {
+      // If a specific past date is selected, header shows that day's P/L
+      setDailyResult(plForPeriod);
+    }
+    // When no date selected (today) or when date changes, isLoadingDailyResult depends on main isLoading
+    setIsLoadingDailyResult(isLoading);
+
+
+    const winningTradesForPeriod = tradesForSelectedPeriod.filter(t => t.profit > 0);
+    const newWinRateForPeriod = tradesForSelectedPeriod.length > 0 ? (winningTradesForPeriod.length / tradesForSelectedPeriod.length) * 100 : 0;
+    setWinRateForPeriod(newWinRateForPeriod);
 
     if (tradesForSelectedPeriod.length > 0) {
         const sumEmotionAfter = tradesForSelectedPeriod.reduce((sum, trade) => sum + trade.emotionAfter, 0);
@@ -248,7 +273,8 @@ export default function DashboardPage() {
         setWeeklyPLChartData(newWeeklyPLData);
     }
 
-  }, [allTrades, selectedDate, isLoading, userId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allTrades, selectedDate, isLoading, userId, setDailyResult, setIsLoadingDailyResult]);
 
   useEffect(() => {
     if (riskSettings && profitOrLossForPeriod < 0 && Math.abs(profitOrLossForPeriod) >= riskSettings.dailyLossLimit) {
@@ -257,6 +283,15 @@ export default function DashboardPage() {
         setLossLimitReached(false);
     }
   }, [profitOrLossForPeriod, riskSettings]);
+  
+  useEffect(() => {
+    // Cleanup function to reset daily result when navigating away
+    return () => {
+      setDailyResult(null);
+      setIsLoadingDailyResult(true); // Reset to loading for next dashboard visit
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
 
   if (!user && !isLoading) return (
@@ -293,9 +328,18 @@ export default function DashboardPage() {
   
   const periodChartTitle = selectedDate && isValid(selectedDate)
     ? `Trades do Dia: ${format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}`
-    : "Resultado Semanal"; // Updated title
+    : "Resultado Semanal";
 
   const noTradesForChart = weeklyPLChartData.length === 0 || weeklyPLChartData.every(item => item.pl === 0);
+
+  const summaryTitle = selectedDate && isValid(selectedDate) 
+    ? `Resumo de ${format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}` 
+    : "Resumo do Dia de Hoje";
+  
+  const resultTitle = selectedDate && isValid(selectedDate)
+    ? `Resultado de ${format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}`
+    : "Resultado do Dia";
+
 
   return (
     <div className="container mx-auto py-8">
@@ -319,41 +363,57 @@ export default function DashboardPage() {
                 <Calendar
                   mode="single"
                   selected={selectedDate}
-                  onSelect={setSelectedDate}
+                  onSelect={(date) => {
+                    setSelectedDate(date);
+                    if (!date) { // If cleared, reset header to today's P/L
+                        const today = new Date();
+                        const startOfToday = startOfDay(today);
+                        const endOfToday = endOfDay(today);
+                        const tradesForToday = allTrades.filter(trade => trade.date >= startOfToday && trade.date <= endOfToday);
+                        const plForToday = tradesForToday.reduce((sum, trade) => sum + trade.profit, 0);
+                        setDailyResult(plForToday);
+                    }
+                  }}
                   initialFocus
                   locale={ptBR}
                   disabled={(date) => date > new Date() || date < new Date("2020-01-01")}
                 />
               </PopoverContent>
             </Popover>
-            {selectedDate && <Button variant="ghost" onClick={() => setSelectedDate(undefined)}>Limpar filtro</Button>}
+            {selectedDate && <Button variant="ghost" onClick={() => {
+                setSelectedDate(undefined);
+                // When filter is cleared, reset header P/L to today's actual P/L
+                const today = new Date();
+                const startOfToday = startOfDay(today);
+                const endOfToday = endOfDay(today);
+                const tradesForToday = allTrades.filter(trade => trade.date >= startOfToday && trade.date <= endOfToday);
+                const plForToday = tradesForToday.reduce((sum, trade) => sum + trade.profit, 0);
+                setDailyResult(plForToday);
+                setIsLoadingDailyResult(isLoading); // Reflect main loading state
+            }}>Limpar filtro</Button>}
         </div>
       </div>
 
       <section className="mb-8">
-        <h2 className="text-xl font-semibold mb-4 font-headline">
-            {selectedDate && isValid(selectedDate) ? `Resumo de ${format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}` : "Resumo do Dia de Hoje"}
-        </h2>
+        <h2 className="text-xl font-semibold mb-4 font-headline">{summaryTitle}</h2>
         {isLoading && allTrades.length === 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            {[...Array(5)].map((_,i) => <StatCard key={i} title="Carregando..." value="..." icon={<Loader2 className="h-5 w-5 animate-spin text-muted-foreground"/>} description="..." isLoadingCard={true}/>)}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+            {[...Array(6)].map((_,i) => <StatCard key={i} title="Carregando..." value="..." icon={<Loader2 className="h-5 w-5 animate-spin text-muted-foreground"/>} description="..." isLoadingCard={true}/>)}
           </div>
         ) : (
-          <>
-            {/* Removed Daily Plan Pending Alert */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-              <StatCard title="Trades Realizados" value={tradesForPeriodCount} icon={<BarChart className="h-5 w-5 text-muted-foreground" />} description="Operações" isLoadingCard={isLoading && allTrades.length === 0} />
-              <StatCard title="Resultado do Período" value={`R$ ${profitOrLossForPeriod.toFixed(2)}`} icon={<DollarSign className="h-5 w-5 text-muted-foreground" />} description="Financeiro" isLoadingCard={isLoading && allTrades.length === 0} valueColor={profitOrLossForPeriod >= 0 ? 'text-green-600' : 'text-red-600'}/>
-              <StatCard title="Emoção Média" value={averageEmotionForPeriod || 'N/A'} icon={<Smile className="h-5 w-5 text-muted-foreground" />} description="Pós-trades (0-10)" isLoadingCard={isLoading && allTrades.length === 0} />
-              <StatCard title="Ativo Mais Operado" value={mostTradedAssetForPeriod} icon={<Tag className="h-5 w-5 text-muted-foreground" />} description="Mais frequente" isLoadingCard={isLoading && allTrades.length === 0} />
-              <StatCard title="Horário Mais Operado" value={mostTradedPeriodForPeriod} icon={<Clock className="h-5 w-5 text-muted-foreground" />} description="Período" isLoadingCard={isLoading && allTrades.length === 0} />
-            </div>
-          </>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+            <StatCard title="Trades Realizados" value={tradesForPeriodCount} icon={<BarChart className="h-5 w-5 text-muted-foreground" />} description="Operações no período" isLoadingCard={isLoading && allTrades.length === 0} />
+            <StatCard title={resultTitle} value={`R$ ${profitOrLossForPeriod.toFixed(2)}`} icon={<DollarSign className="h-5 w-5 text-muted-foreground" />} description="Financeiro do período" isLoadingCard={isLoading && allTrades.length === 0} valueColor={profitOrLossForPeriod >= 0 ? 'text-green-600' : 'text-red-600'}/>
+            <StatCard title="Taxa de Acerto" value={`${winRateForPeriod.toFixed(1)}%`} icon={<Percent className="h-5 w-5 text-muted-foreground" />} description="Acertos no período" isLoadingCard={isLoading && allTrades.length === 0} />
+            <StatCard title="Emoção Média" value={averageEmotionForPeriod || 'N/A'} icon={<Smile className="h-5 w-5 text-muted-foreground" />} description="Pós-trades (0-10)" isLoadingCard={isLoading && allTrades.length === 0} />
+            <StatCard title="Ativo Mais Operado" value={mostTradedAssetForPeriod} icon={<Tag className="h-5 w-5 text-muted-foreground" />} description="Mais frequente no período" isLoadingCard={isLoading && allTrades.length === 0} />
+            <StatCard title="Horário Mais Operado" value={mostTradedPeriodForPeriod} icon={<Clock className="h-5 w-5 text-muted-foreground" />} description="Período no dia" isLoadingCard={isLoading && allTrades.length === 0} />
+          </div>
         )}
       </section>
 
       <div className="grid gap-6 md:grid-cols-3 mb-6">
-        <Card className="md:col-span-3 shadow-md hover:shadow-lg transition-shadow duration-300"> {/* Chart now md:col-span-3 */}
+        <Card className="md:col-span-3 shadow-md hover:shadow-lg transition-shadow duration-300">
           <CardHeader>
             <CardTitle className="font-headline text-lg">{periodChartTitle}</CardTitle>
             <CardDescription className="text-sm">
@@ -410,42 +470,8 @@ export default function DashboardPage() {
         </Card>
       </div>
       
-      <div className="grid gap-6 md:grid-cols-3 mt-6">
-         {/* Acesso Rápido */}
-        <Card className="md:col-span-1 shadow-md hover:shadow-lg transition-shadow duration-300">
-          <CardHeader>
-            <CardTitle className="font-headline text-lg">Acesso Rápido</CardTitle>
-            <CardDescription className="text-sm">Principais ferramentas.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-3">
-            <Button asChild variant="outline" className="h-auto py-3 text-xs sm:text-sm flex-col items-center text-center hover:bg-primary/10">
-              <Link href="/trade-log">
-                <PlusCircle className="h-5 w-5 mb-1" />
-                <span>Novo Trade</span>
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="h-auto py-3 text-xs sm:text-sm flex-col items-center text-center hover:bg-primary/10">
-              <Link href="/daily-plan">
-                <FileText className="h-5 w-5 mb-1" />
-                <span>Plano Diário</span>
-              </Link>
-            </Button>
-             <Button asChild variant="outline" className="h-auto py-3 text-xs sm:text-sm flex-col items-center text-center hover:bg-primary/10">
-              <Link href="/market-overview">
-                <LineChartIcon className="h-5 w-5 mb-1" /> 
-                <span>Mercado</span>
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="h-auto py-3 text-xs sm:text-sm flex-col items-center text-center hover:bg-primary/10">
-              <Link href="/print-analysis">
-                <ScanLine className="h-5 w-5 mb-1" />
-                <span>Análise Print</span>
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-         <Card className="md:col-span-1 shadow-md hover:shadow-lg transition-shadow duration-300"> {/* Changed from md:col-span-2 */}
+      <div className="grid gap-6 md:grid-cols-2 mt-6"> {/* Changed to md:grid-cols-2 */}
+         <Card className="md:col-span-1 shadow-md hover:shadow-lg transition-shadow duration-300">
           <CardHeader>
             <CardTitle className="font-headline text-lg">Desempenho (Últimos 7 dias)</CardTitle>
             <CardDescription className="text-sm">Métricas de performance do período.</CardDescription>
@@ -457,7 +483,7 @@ export default function DashboardPage() {
                     <p className="ml-3 text-sm">Carregando desempenho...</p>
                 </div>
              ) : (
-                <div className="grid grid-cols-1 gap-4"> {/* Changed from grid-cols-2 */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <StatCard title="Trades Vencedores" value={winningTrades7DaysCount} icon={<CheckCircle className="h-5 w-5 text-green-500" />} description="Ganhos no período" isLoadingCard={isLoading && allTrades.length === 0}/>
                     <StatCard title="Trades Perdedores" value={losingTrades7DaysCount} icon={<XCircle className="h-5 w-5 text-red-500" />} description="Perdas no período" isLoadingCard={isLoading && allTrades.length === 0}/>
                     <StatCard title="Taxa de Acerto" value={`${winRate7Days.toFixed(1)}%`} icon={<Percent className="h-5 w-5 text-muted-foreground" />} description="Percentual de acertos" isLoadingCard={isLoading && allTrades.length === 0}/>

@@ -8,6 +8,7 @@ import { useAuth } from '@/components/auth-provider';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
+import { DashboardHeaderProvider } from '@/contexts/dashboard-header-context';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -44,14 +45,16 @@ export default function AppLayout({ children }: AppLayoutProps) {
   }
 
   return (
-    <SidebarProvider defaultOpen={true}>
-      <AppSidebar />
-      <SidebarInset>
-        <AppHeader />
-        <main className="flex-1 p-4 md:p-8 lg:p-10">
-          {children}
-        </main>
-      </SidebarInset>
-    </SidebarProvider>
+    <DashboardHeaderProvider>
+      <SidebarProvider defaultOpen={true}>
+        <AppSidebar />
+        <SidebarInset>
+          <AppHeader />
+          <main className="flex-1 p-4 md:p-8 lg:p-10">
+            {children}
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+    </DashboardHeaderProvider>
   );
 }
