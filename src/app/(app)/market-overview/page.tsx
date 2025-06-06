@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { TrendingUp, TrendingDown, BarChartBig, Users, CalendarDays, Bell, Loader2, AlertTriangle } from 'lucide-react'; 
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'; // Added AlertDescription
 
 interface MarketAssetProps {
   name: string;
@@ -380,3 +381,4 @@ export default function MarketOverviewPage() {
     </div>
   );
 }
+
