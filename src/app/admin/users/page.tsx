@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useAuth } from '@/components/auth-provider';
+import { useAuth, type UserPlan as AuthUserPlan, type UserProfileData as AuthUserProfileData } from '@/components/auth-provider';
 import { db, collection, getDocs, doc, updateDoc, Timestamp, query, orderBy as firestoreOrderBy } from '@/lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
@@ -20,30 +20,21 @@ import { Loader2, ShieldAlert, Users, ArrowLeft, Phone, Fingerprint, Edit } from
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 
-type UserPlan = 'free' | 'pro' | 'vitalicio';
+// Use UserPlan from auth-provider
+type UserPlan = AuthUserPlan;
 
-interface UserProfileDataFirestore {
-  uid: string;
-  name: string;
-  email: string;
-  whatsapp?: string;
-  cpf?: string;
-  plan: UserPlan;
-  memberSince: Timestamp | string;
-  lastPayment?: Timestamp | string;
-}
+// Use UserProfileData from auth-provider for Firestore structure
+interface UserProfileDataFirestore extends AuthUserProfileData {}
 
 interface UserProfileAdminView extends Omit<UserProfileDataFirestore, 'memberSince' | 'lastPayment'> {
-  id: string;
-  memberSince: string;
-  lastPayment?: string;
-  whatsapp?: string;
-  cpf?: string;
+  id: string; // Firestore document ID
+  memberSince: string; // Formatted date string
+  lastPayment?: string; // Formatted date string
 }
 
 const editUserSchema = z.object({
   name: z.string().min(2, { message: "Nome deve ter pelo menos 2 caracteres." }),
-  email: z.string().email({ message: "Email inválido." }), // Mantido para exibição, não para alteração direta de login
+  email: z.string().email({ message: "Email inválido." }),
   whatsapp: z.string().optional(),
   cpf: z.string().optional(),
 });
@@ -51,7 +42,7 @@ const editUserSchema = z.object({
 type EditUserFormValues = z.infer<typeof editUserSchema>;
 
 export default function AdminUsersPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, authLoading, userProfile, profileLoading } = useAuth();
   const router = useRouter();
   const [usersList, setUsersList] = useState<UserProfileAdminView[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
@@ -64,25 +55,21 @@ export default function AdminUsersPage() {
 
   const editForm = useForm<EditUserFormValues>({
     resolver: zodResolver(editUserSchema),
-    defaultValues: {
-      name: '',
-      email: '',
-      whatsapp: '',
-      cpf: '',
-    }
+    defaultValues: { name: '', email: '', whatsapp: '', cpf: '' }
   });
 
   useEffect(() => {
-    if (!authLoading) {
-      if (!user || user.email !== 'felipejw.fm@gmail.com') {
+    const overallLoading = authLoading || profileLoading;
+    if (!overallLoading) {
+      if (!user || userProfile?.email !== 'felipejw.fm@gmail.com') {
         toast({ variant: 'destructive', title: 'Acesso Negado', description: 'Você não tem permissão para acessar esta página.' });
         router.replace('/dashboard');
       }
     }
-  }, [user, authLoading, router, toast]);
+  }, [user, userProfile, authLoading, profileLoading, router, toast]);
 
   useEffect(() => {
-    if (user && user.email === 'felipejw.fm@gmail.com') {
+    if (userProfile && userProfile.email === 'felipejw.fm@gmail.com') {
       const fetchUsers = async () => {
         setIsLoadingUsers(true);
         try {
@@ -109,7 +96,7 @@ export default function AdminUsersPage() {
       };
       fetchUsers();
     }
-  }, [user, toast]);
+  }, [userProfile, toast]);
 
   const handlePlanChange = async (userIdToUpdate: string, newPlan: UserPlan) => {
     setIsUpdatingPlan(userIdToUpdate);
@@ -119,7 +106,7 @@ export default function AdminUsersPage() {
       setUsersList(prevUsers =>
         prevUsers.map(u => (u.id === userIdToUpdate ? { ...u, plan: newPlan } : u))
       );
-      toast({ title: 'Plano Atualizado!', description: `Plano do usuário alterado para ${newPlan.toUpperCase()}.` });
+      toast({ title: 'Plano Atualizado!', description: `Plano do usuário alterado para ${newPlan === 'premium' ? 'Premium' : 'Gratuito'}.` });
     } catch (error) {
       console.error("Error updating plan:", error);
       toast({ variant: "destructive", title: "Erro ao Atualizar Plano", description: "Não foi possível alterar o plano do usuário." });
@@ -143,23 +130,15 @@ export default function AdminUsersPage() {
     setIsSubmittingEdit(true);
     try {
       const userDocRef = doc(db, 'users', editingUser.id);
-      // Note: We are not updating the email field in Firestore here, as it's tied to Firebase Auth.
-      // This form only updates name, whatsapp, and cpf.
       await updateDoc(userDocRef, {
         name: data.name,
-        whatsapp: data.whatsapp || '', // Store empty string if undefined
-        cpf: data.cpf || '',         // Store empty string if undefined
+        whatsapp: data.whatsapp || '',
+        cpf: data.cpf || '',
       });
-
       setUsersList(prevUsers =>
         prevUsers.map(u =>
           u.id === editingUser.id
-            ? {
-                ...u,
-                name: data.name,
-                whatsapp: data.whatsapp || 'N/A',
-                cpf: data.cpf || 'N/A',
-              }
+            ? { ...u, name: data.name, whatsapp: data.whatsapp || 'N/A', cpf: data.cpf || 'N/A' }
             : u
         )
       );
@@ -173,8 +152,7 @@ export default function AdminUsersPage() {
     setIsSubmittingEdit(false);
   };
 
-
-  if (authLoading || (!user && !authLoading)) {
+  if (authLoading || profileLoading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background p-4">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -183,8 +161,8 @@ export default function AdminUsersPage() {
     );
   }
 
-  if (!user || user.email !== 'felipejw.fm@gmail.com') {
-    return null;
+  if (!userProfile || userProfile.email !== 'felipejw.fm@gmail.com') {
+    return null; // AuthProvider handles redirection, or this page can show an explicit "access denied"
   }
 
   return (
@@ -240,7 +218,7 @@ export default function AdminUsersPage() {
                         <TableCell>{u.email}</TableCell>
                         <TableCell>{u.whatsapp}</TableCell>
                         <TableCell>{u.cpf}</TableCell>
-                        <TableCell className="capitalize">{u.plan}</TableCell>
+                        <TableCell className="capitalize">{u.plan === 'premium' ? 'Premium' : 'Gratuito'}</TableCell>
                         <TableCell>{u.memberSince}</TableCell>
                         <TableCell>{u.lastPayment}</TableCell>
                         <TableCell className="text-center w-[180px]">
@@ -249,15 +227,14 @@ export default function AdminUsersPage() {
                           ) : (
                             <Select
                               value={u.plan}
-                              onValueChange={(newPlan: UserPlan) => handlePlanChange(u.id, newPlan)}
+                              onValueChange={(newPlanValue: UserPlan) => handlePlanChange(u.id, newPlanValue)}
                             >
                               <SelectTrigger className="h-9 text-xs w-full">
                                 <SelectValue placeholder="Alterar plano" />
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="free">Gratuito</SelectItem>
-                                <SelectItem value="pro">Pro</SelectItem>
-                                <SelectItem value="vitalicio">Vitalício</SelectItem>
+                                <SelectItem value="premium">Premium</SelectItem>
                               </SelectContent>
                             </Select>
                           )}
@@ -361,7 +338,6 @@ export default function AdminUsersPage() {
           <CardContent className="text-yellow-700 dark:text-yellow-400 text-sm space-y-1">
             <p><strong>Gerenciamento de Acesso:</strong> Para desabilitar/habilitar o acesso de um usuário, utilize o console do Firebase Authentication.</p>
             <p><strong>Impacto das Alterações:</strong> Mudanças de plano aqui afetam o acesso do usuário aos recursos da plataforma.</p>
-            <p><strong>Alteração de Email:</strong> A alteração do email de login deve ser feita com cautela e preferencialmente através das ferramentas do Firebase Authentication para garantir a integridade da conta.</p>
           </CardContent>
         </Card>
       </main>

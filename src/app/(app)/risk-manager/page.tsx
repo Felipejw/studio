@@ -10,11 +10,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Landmark, Percent, Target, ShieldOff, Calculator, AlertTriangle, CheckCircle, ListCollapse, Loader2 } from 'lucide-react';
+import { Landmark, Percent, Target, ShieldOff, Calculator, AlertTriangle, CheckCircle, ListCollapse, Loader2, ShieldAlert } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { db, doc, getDoc, setDoc } from '@/lib/firebase';
+import { db, doc, getDoc, setDoc, Timestamp } from '@/lib/firebase'; // Timestamp import
 import { useAuth } from '@/components/auth-provider';
+import Link from 'next/link';
 
 const riskSettingsSchema = z.object({
   availableCapital: z.coerce.number().positive("Capital deve ser positivo."),
@@ -25,9 +26,40 @@ const riskSettingsSchema = z.object({
 
 type RiskSettingsFormValues = z.infer<typeof riskSettingsSchema>;
 
-interface RiskSettings extends RiskSettingsFormValues {
+interface RiskSettingsFirestore extends RiskSettingsFormValues { // For Firestore
   userId: string;
-  updatedAt: Date;
+  updatedAt: Timestamp; // Use Timestamp for Firestore
+}
+
+interface RiskSettings extends RiskSettingsFormValues { // For local state/form
+  userId: string;
+  updatedAt: Date; // Use Date for local state
+}
+
+function AccessDeniedPremium() {
+  return (
+    <div className="container mx-auto py-12 flex justify-center items-center">
+      <Card className="w-full max-w-md text-center shadow-lg">
+        <CardHeader>
+          <div className="mx-auto bg-destructive/10 p-3 rounded-full w-fit">
+            <ShieldAlert className="h-10 w-10 text-destructive" />
+          </div>
+          <CardTitle className="mt-4 font-headline text-2xl">Acesso Premium Necessário</CardTitle>
+          <CardDescription>
+            O Gestor de Risco Detalhado é uma ferramenta exclusiva para assinantes do Plano Premium.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-6 text-sm">
+            Faça upgrade para definir seu capital, risco por operação, metas e limites, além de usar a calculadora de lote.
+          </p>
+          <Button asChild size="lg" className="w-full">
+            <Link href="/pricing">Ver Planos Premium</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
 
 export default function RiskManagerPage() {
@@ -35,8 +67,8 @@ export default function RiskManagerPage() {
   const [suggestedLotSize, setSuggestedLotSize] = useState<number | null>(null);
   const [currentPL, setCurrentPL] = useState(0); 
   const { toast } = useToast();
-  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
-  const { userId, user } = useAuth();
+  const [isSubmittingForm, setIsSubmittingForm] = useState(false);
+  const { user, userId, userProfile, loading: authLoading, profileLoading } = useAuth();
 
   const form = useForm<RiskSettingsFormValues>({
     resolver: zodResolver(riskSettingsSchema),
@@ -51,32 +83,30 @@ export default function RiskManagerPage() {
   useEffect(() => {
     const fetchSettings = async () => {
       if (!userId) {
-        setIsLoadingSettings(false);
-        form.reset({ // Reset to defaults if no user
-            availableCapital: 10000,
-            riskPerTradePercent: 1,
-            dailyProfitTarget: 200,
-            dailyLossLimit: 100,
-        });
+        form.reset();
         setSettings(null);
         return;
       }
-      setIsLoadingSettings(true);
       try {
         const settingsDocRef = doc(db, "risk_config", userId);
         const docSnap = await getDoc(settingsDocRef);
         if (docSnap.exists()) {
-          const loadedSettings = docSnap.data() as RiskSettings;
+          const loadedData = docSnap.data() as RiskSettingsFirestore;
+          const loadedSettings: RiskSettings = {
+            ...loadedData,
+            updatedAt: loadedData.updatedAt.toDate(), // Convert Timestamp to Date
+          };
           setSettings(loadedSettings);
           form.reset(loadedSettings); 
         } else {
-          const defaultSettings = {
+          // If no settings in DB, use form defaults but associate with userId
+           const defaultSettings: RiskSettings = {
             ...form.getValues(),
             userId: userId,
             updatedAt: new Date(),
           };
           setSettings(defaultSettings);
-          form.reset(defaultSettings); // Ensure form reflects defaults if no DB entry
+          form.reset(defaultSettings); // This ensures form reflects the defaults
         }
       } catch (error) {
         console.error("Error fetching risk settings:", error);
@@ -85,36 +115,38 @@ export default function RiskManagerPage() {
           title: "Erro ao Carregar Configurações",
           description: "Não foi possível buscar suas configurações de risco.",
         });
-        const defaultSettingsOnError = {
+         const errorFallbackSettings: RiskSettings = { // Fallback on error
             ...form.getValues(),
             userId: userId,
             updatedAt: new Date(),
-        };
-        setSettings(defaultSettingsOnError);
-        form.reset(defaultSettingsOnError);
+          };
+        setSettings(errorFallbackSettings);
+        form.reset(errorFallbackSettings);
       }
-      setIsLoadingSettings(false);
     };
 
-    fetchSettings();
+    if (!authLoading && !profileLoading) { // Only fetch if auth/profile is loaded
+        fetchSettings();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, form.reset, toast]); 
+  }, [userId, form.reset, toast, authLoading, profileLoading]); 
 
   const onSubmit: SubmitHandler<RiskSettingsFormValues> = async (data) => {
     if (!userId) {
       toast({ variant: "destructive", title: "Erro de Autenticação", description: "Usuário não autenticado." });
       return;
     }
+    setIsSubmittingForm(true);
     try {
-      const settingsToSave: RiskSettings = {
+      const settingsToSave: RiskSettingsFirestore = {
         ...data,
         userId: userId,
-        updatedAt: new Date(),
+        updatedAt: Timestamp.fromDate(new Date()), // Use Timestamp for Firestore
       };
       const settingsDocRef = doc(db, "risk_config", userId); 
       await setDoc(settingsDocRef, settingsToSave, { merge: true }); 
 
-      setSettings(settingsToSave);
+      setSettings({...settingsToSave, updatedAt: settingsToSave.updatedAt.toDate()}); // Update local state with Date object
       toast({
           title: "Configurações Salvas!",
           description: "Suas novas configurações de risco foram aplicadas.",
@@ -128,6 +160,7 @@ export default function RiskManagerPage() {
         description: "Não foi possível salvar suas configurações de risco.",
       });
     }
+    setIsSubmittingForm(false);
   };
   
   const calculateLotSize = (stopPoints: number) => {
@@ -144,15 +177,21 @@ export default function RiskManagerPage() {
   const profitTargetReached = settings && currentPL >= settings.dailyProfitTarget;
   const lossLimitReached = settings && currentPL <= -settings.dailyLossLimit;
 
-  if (!user) return null; 
+  const isLoadingPage = authLoading || profileLoading || (!settings && !!userId); // Consider settings loading if userId is present
 
-  if (isLoadingSettings) {
+  if (isLoadingPage) {
     return (
-        <div className="container mx-auto py-8 flex justify-center items-center">
+        <div className="container mx-auto py-8 flex justify-center items-center h-[calc(100vh-200px)]">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="ml-2">Carregando configurações de risco...</p>
+            <p className="ml-2">Carregando gestor de risco...</p>
         </div>
     );
+  }
+
+  if (!user) return null; // AuthProvider handles redirect
+
+  if (userProfile?.plan !== 'premium' && userProfile?.email !== 'felipejw.fm@gmail.com') { // Admin override for testing
+    return <AccessDeniedPremium />;
   }
 
   return (
@@ -185,7 +224,10 @@ export default function RiskManagerPage() {
                       <FormItem><FormLabel className="flex items-center"><ShieldOff className="mr-2 h-4 w-4"/>Limite de Perda Diária (R$)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
                     )} />
                 </div>
-                <Button type="submit" className="w-full md:w-auto" disabled={!userId}>Salvar Configurações</Button>
+                <Button type="submit" className="w-full md:w-auto" disabled={!userId || isSubmittingForm}>
+                    {isSubmittingForm && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                    Salvar Configurações
+                </Button>
               </form>
               </Form>
             </CardContent>

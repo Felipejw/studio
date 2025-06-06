@@ -3,15 +3,16 @@
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { CheckCircle, DollarSign, Crown, Star } from 'lucide-react';
+import { CheckCircle, DollarSign, Star, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/components/auth-provider';
 import { useRouter } from 'next/navigation';
 
 type PlanFeature = string;
+export type UserPlanPricing = 'free' | 'premium'; // Updated type
 
 interface PricingPlan {
-  id: 'free' | 'pro' | 'vitalicio';
+  id: UserPlanPricing;
   name: string;
   price: string;
   priceFrequency?: string;
@@ -28,56 +29,42 @@ const plans: PricingPlan[] = [
     name: 'Plano Gratuito',
     price: 'R$0',
     priceFrequency: '/mês',
-    description: 'Comece a organizar seus trades sem custo.',
+    description: 'Organize seus trades básicos sem custo.',
     features: [
-      'Registro de Trades (limitado)',
+      'Registro de Trades',
       'Dashboard Básico',
-      'Calculadora de Risco Simples',
+      'Suporte Comunitário',
     ],
     icon: Star,
     cta: 'Começar Gratuitamente',
   },
   {
-    id: 'pro',
-    name: 'Plano Pro',
-    price: 'R$49',
+    id: 'premium',
+    name: 'Plano Premium',
+    price: 'R$97',
     priceFrequency: '/mês',
-    description: 'Ferramentas avançadas para traders sérios.',
+    description: 'Ferramentas avançadas com IA para traders sérios.',
     features: [
-      'Registro de Trades Ilimitado',
+      'Todos os recursos do Gratuito',
       'Dashboard Completo com Métricas Avançadas',
       'Plano Diário com IA',
       'Psicólogo Virtual com IA',
       'Gestor de Risco Detalhado',
-      'Painel de Mercado',
+      'Suporte Prioritário',
     ],
-    icon: Crown,
-    cta: 'Assinar Plano Pro',
+    icon: ShieldCheck,
+    cta: 'Assinar Plano Premium',
     popular: true,
-  },
-  {
-    id: 'vitalicio',
-    name: 'Plano Vitalício',
-    price: 'R$499',
-    description: 'Acesso completo para sempre, pagamento único.',
-    features: [
-      'Todos os recursos do Plano Pro',
-      'Acesso vitalício à plataforma',
-      'Suporte prioritário',
-      'Atualizações futuras inclusas',
-    ],
-    icon: DollarSign,
-    cta: 'Adquirir Acesso Vitalício',
   },
 ];
 
 export default function PricingPage() {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth(); // userProfile for current plan check
   const router = useRouter();
 
-  const handleSelectPlan = (planId: string) => {
+  const handleSelectPlan = (planId: UserPlanPricing) => {
     if (!user) {
-      router.push('/login?redirect=/pricing'); // Redireciona para login se não estiver logado
+      router.push('/login?redirect=/pricing');
     } else {
       router.push(`/checkout?planId=${planId}`);
     }
@@ -88,17 +75,17 @@ export default function PricingPage() {
       <div className="text-center mb-12">
         <h1 className="text-4xl font-bold mb-4 font-headline">Escolha o Plano Ideal para Você</h1>
         <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-          Desbloqueie todo o potencial da sua jornada de trading com nossas ferramentas e insights.
+          Desbloqueie o potencial máximo da sua jornada de trading com nossas ferramentas e insights.
         </p>
       </div>
 
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
+      <div className="grid md:grid-cols-1 lg:grid-cols-2 gap-8 items-stretch max-w-3xl mx-auto">
         {plans.map((plan) => (
           <Card
             key={plan.id}
             className={`flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300 ${
               plan.popular ? 'border-primary border-2 ring-4 ring-primary/20' : ''
-            }`}
+            } ${userProfile?.plan === plan.id ? 'bg-primary/5' : ''}`}
           >
             {plan.popular && (
               <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2">
@@ -129,13 +116,24 @@ export default function PricingPage() {
               </ul>
             </CardContent>
             <div className="p-6 pt-0 mt-auto">
-              <Button
-                onClick={() => handleSelectPlan(plan.id)}
-                className={`w-full text-lg py-3 ${plan.popular ? '' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}
-                size="lg"
-              >
-                {plan.cta}
-              </Button>
+              {userProfile?.plan === plan.id ? (
+                 <Button
+                    variant="outline"
+                    className="w-full text-lg py-3"
+                    size="lg"
+                    disabled
+                  >
+                    Plano Atual
+                  </Button>
+              ) : (
+                 <Button
+                    onClick={() => handleSelectPlan(plan.id)}
+                    className={`w-full text-lg py-3 ${plan.popular ? '' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}
+                    size="lg"
+                  >
+                    {plan.cta}
+                  </Button>
+              )}
             </div>
           </Card>
         ))}

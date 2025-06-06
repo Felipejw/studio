@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -13,11 +13,12 @@ import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { generateDailyPlan, type GenerateDailyPlanInput, type GenerateDailyPlanOutput } from '@/ai/flows/generate-daily-plan';
-import { Loader2, Wand2 } from 'lucide-react';
+import { Loader2, Wand2, ShieldAlert } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { db, collection, addDoc } from '@/lib/firebase';
+import { db, collection, addDoc, Timestamp } from '@/lib/firebase'; // Timestamp added
 import { useAuth } from '@/components/auth-provider';
+import Link from 'next/link';
 
 const setupsOptions = [
   { id: 'scalping', label: 'Scalping' },
@@ -38,11 +39,38 @@ const formSchema = z.object({
 
 type DailyPlanFormValues = z.infer<typeof formSchema>;
 
+function AccessDeniedPremium() {
+  return (
+    <div className="container mx-auto py-12 flex justify-center items-center">
+      <Card className="w-full max-w-md text-center shadow-lg">
+        <CardHeader>
+          <div className="mx-auto bg-destructive/10 p-3 rounded-full w-fit">
+            <ShieldAlert className="h-10 w-10 text-destructive" />
+          </div>
+          <CardTitle className="mt-4 font-headline text-2xl">Acesso Premium Necessário</CardTitle>
+          <CardDescription>
+            A funcionalidade de Plano Diário com IA é exclusiva para assinantes do Plano Premium.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-6 text-sm">
+            Faça upgrade do seu plano para receber planos de trading personalizados pela nossa inteligência artificial, definindo suas metas, setups e estado emocional.
+          </p>
+          <Button asChild size="lg" className="w-full">
+            <Link href="/pricing">Ver Planos Premium</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+
 export default function DailyPlanPage() {
   const [aiResponse, setAiResponse] = useState<GenerateDailyPlanOutput | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const { toast } = useToast();
-  const { userId, user } = useAuth();
+  const { user, userId, userProfile, loading: authLoading, profileLoading } = useAuth();
 
   const form = useForm<DailyPlanFormValues>({
     resolver: zodResolver(formSchema),
@@ -61,23 +89,22 @@ export default function DailyPlanPage() {
       toast({ variant: "destructive", title: "Erro de Autenticação", description: "Usuário não autenticado." });
       return;
     }
-    setIsLoading(true);
+    setIsGeneratingPlan(true);
     setAiResponse(null);
     try {
       const response = await generateDailyPlan(data as GenerateDailyPlanInput);
       setAiResponse(response);
 
-      // Save to Firestore
       await addDoc(collection(db, "trading_plans"), {
         ...data,
         aiGeneratedPlan: response,
         userId: userId,
-        createdAt: new Date(),
+        createdAt: Timestamp.fromDate(new Date()), // Use Timestamp
       });
 
       toast({
         title: "Plano Gerado e Salvo!",
-        description: "Seu plano diário foi criado pela IA e salvo no Firestore.",
+        description: "Seu plano diário foi criado pela IA e salvo.",
       });
 
     } catch (error) {
@@ -88,10 +115,25 @@ export default function DailyPlanPage() {
         description: "Não foi possível gerar ou salvar o plano. Tente novamente.",
       });
     }
-    setIsLoading(false);
+    setIsGeneratingPlan(false);
   };
   
-  if (!user) return null; // Or a loading/auth check component
+  const isLoading = authLoading || profileLoading;
+
+  if (isLoading) {
+    return (
+      <div className="flex h-[calc(100vh-200px)] w-full items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="ml-3">Carregando...</p>
+      </div>
+    );
+  }
+
+  if (!user) return null; // AuthProvider handles redirect
+
+  if (userProfile?.plan !== 'premium' && userProfile?.email !== 'felipejw.fm@gmail.com') { // Admin override for testing
+    return <AccessDeniedPremium />;
+  }
 
   return (
     <div className="container mx-auto py-8">
@@ -253,8 +295,8 @@ export default function DailyPlanPage() {
                   )}
                 />
                 
-                <Button type="submit" disabled={isLoading || !userId} className="w-full">
-                  {isLoading ? (
+                <Button type="submit" disabled={isGeneratingPlan || !userId} className="w-full">
+                  {isGeneratingPlan ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                     <Wand2 className="mr-2 h-4 w-4" />
@@ -266,12 +308,12 @@ export default function DailyPlanPage() {
           </CardContent>
         </Card>
 
-        <Card className={isLoading || aiResponse ? 'block' : 'hidden'}>
+        <Card className={isGeneratingPlan || aiResponse ? 'block' : 'hidden'}>
           <CardHeader>
             <CardTitle className="font-headline">Seu Plano Diário Personalizado</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {isLoading && !aiResponse && (
+            {isGeneratingPlan && !aiResponse && (
               <div className="flex flex-col items-center justify-center h-64">
                 <Loader2 className="h-12 w-12 animate-spin text-primary" />
                 <p className="mt-4 text-muted-foreground">Gerando seu plano...</p>

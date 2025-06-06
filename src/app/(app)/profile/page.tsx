@@ -5,35 +5,18 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation'; 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { UserCircle, CreditCard, Settings, History, Download, Star, BarChartHorizontalBig, Edit, Loader2, Phone, Fingerprint } from 'lucide-react';
+import { UserCircle, CreditCard, Settings, History, Download, Star, BarChartHorizontalBig, Edit, Loader2, Phone, Fingerprint, ShieldCheck } from 'lucide-react';
 import Image from 'next/image';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
 import { db, doc, getDoc, setDoc, Timestamp } from '@/lib/firebase'; 
-import { useAuth } from '@/components/auth-provider';
+import { useAuth, type UserProfileData as AuthUserProfileData, type UserPlan } from '@/components/auth-provider'; // Use UserPlan from auth-provider
 
-type UserPlan = 'free' | 'pro' | 'vitalicio';
-
-interface UserProfileDataFirestore {
-  uid: string;
-  name: string;
-  email: string;
-  whatsapp?: string;
-  cpf?: string;
-  plan: UserPlan;
-  memberSince: Timestamp; 
-  lastPayment?: Timestamp; 
-}
-
-interface UserProfileData extends Omit<UserProfileDataFirestore, 'memberSince' | 'lastPayment'> {
-  memberSince: string; 
-  lastPayment?: string; 
-  whatsapp?: string;
-  cpf?: string;
-}
-
+// UserProfileData for this page can extend or use AuthUserProfileData directly
+// For simplicity, we'll assume UserProfileData here is compatible with AuthUserProfileData
+// but often you might have slightly different needs per page, this setup allows flexibility.
 
 const consistencyLevels = [
     { name: "Iniciante", stars: 1, iconHint: "bronze medal" },
@@ -44,113 +27,53 @@ const consistencyLevels = [
 ];
 
 export default function ProfilePage() {
-  const [userProfile, setUserProfile] = useState<UserProfileData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // Use userProfile directly from useAuth hook
+  const { user, userId, userProfile, loading: authProfileLoading, profileLoading } = useAuth();
+  const [isLoading, setIsLoading] = useState(true); // General loading for this page's operations
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({ name: '', email: '', whatsapp: '', cpf: '' });
 
   const { toast } = useToast();
-  const { user, userId } = useAuth();
   const router = useRouter(); 
 
   const currentLevel = consistencyLevels[2]; 
 
-  const fetchUserProfile = async () => {
-    if (!userId) {
-      setIsLoading(false);
-      setUserProfile(null);
-      return;
-    }
-    setIsLoading(true);
-    try {
-      const userDocRef = doc(db, "users", userId);
-      const docSnap = await getDoc(userDocRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data() as UserProfileDataFirestore;
-        setUserProfile({
-            ...data,
-            memberSince: data.memberSince.toDate().toISOString(),
-            lastPayment: data.lastPayment?.toDate().toISOString(),
-            whatsapp: data.whatsapp || '',
-            cpf: data.cpf || '',
-        });
-        setEditForm({ name: data.name, email: data.email, whatsapp: data.whatsapp || '', cpf: data.cpf || '' });
-      } else {
-        if (user) { 
-            const defaultProfileFirestore: UserProfileDataFirestore = {
-              uid: user.uid,
-              name: user.displayName || 'Novo Usuário',
-              email: user.email || 'email@desconhecido.com',
-              whatsapp: '',
-              cpf: '',
-              plan: 'free',
-              memberSince: Timestamp.fromDate(new Date()),
-            };
-            await setDoc(userDocRef, defaultProfileFirestore);
-            setUserProfile({
-                ...defaultProfileFirestore,
-                memberSince: defaultProfileFirestore.memberSince.toDate().toISOString(),
-                whatsapp: defaultProfileFirestore.whatsapp,
-                cpf: defaultProfileFirestore.cpf,
-            });
-            setEditForm({ name: defaultProfileFirestore.name, email: defaultProfileFirestore.email, whatsapp: defaultProfileFirestore.whatsapp || '', cpf: defaultProfileFirestore.cpf || ''});
-            toast({ title: "Perfil Criado", description: "Seu perfil inicial foi configurado." });
-        } else {
-             setUserProfile(null); 
-        }
-      }
-    } catch (error: any) {
-      console.error("Detailed profile fetch error:", error, error.stack);
-      toast({ variant: "destructive", title: "Erro ao Carregar Perfil", description: "Verifique o console para mais detalhes." });
-      setUserProfile(null);
-    }
-    setIsLoading(false);
-  };
-
+  // Effect to initialize form and manage loading state when userProfile changes
   useEffect(() => {
-    fetchUserProfile();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]); 
-
-  const handlePlanChange = async (newPlan: UserPlan) => {
-    if (!userProfile || !userId) return;
-    setIsLoading(true); 
-    try {
-      const userDocRef = doc(db, "users", userId);
-      const currentDocSnap = await getDoc(userDocRef);
-      if (!currentDocSnap.exists()) {
-        toast({ variant: "destructive", title: "Erro", description: "Perfil não encontrado para atualizar plano." });
+    if (!authProfileLoading) { // Wait for auth and profile to finish loading
+      if (userProfile) {
+        setEditForm({
+          name: userProfile.name || '',
+          email: userProfile.email || '',
+          whatsapp: userProfile.whatsapp || '',
+          cpf: userProfile.cpf || '',
+        });
+        setIsLoading(false); // Page data is ready
+      } else if (!user && !authProfileLoading && !profileLoading) {
+        // If no user and all loading is done, AuthProvider should have redirected.
+        // This can be a fallback or if direct navigation happens.
         setIsLoading(false);
-        return;
       }
-      const currentData = currentDocSnap.data() as UserProfileDataFirestore;
-      const updatedProfileFirestore: UserProfileDataFirestore = { 
-        ...currentData, 
-        plan: newPlan,
-      };
-      await setDoc(userDocRef, updatedProfileFirestore, { merge: true });
-      setUserProfile({
-        ...updatedProfileFirestore,
-        memberSince: updatedProfileFirestore.memberSince.toDate().toISOString(),
-        lastPayment: updatedProfileFirestore.lastPayment?.toDate().toISOString(),
-        whatsapp: updatedProfileFirestore.whatsapp || '',
-        cpf: updatedProfileFirestore.cpf || '',
-      });
-      toast({
-        title: "Plano Atualizado!",
-        description: `Seu plano agora é ${newPlan.toUpperCase()}.`,
-      });
-    } catch (error: any) {
-      console.error("Error updating plan:", error, error.stack);
-      toast({ variant: "destructive", title: "Erro ao Atualizar Plano", description: "Verifique o console." });
     }
-    setIsLoading(false);
+     // If authProfileLoading is true, isLoading should remain true
+    setIsLoading(authProfileLoading);
+
+  }, [userProfile, authProfileLoading, user, profileLoading]);
+
+
+  const handlePlanChangeNavigation = (newPlan: UserPlan) => {
+    if (!userProfile || !userId) return;
+    if (newPlan !== userProfile.plan) {
+      router.push(`/checkout?planId=${newPlan}`);
+    } else {
+       toast({ title: "Plano Atual", description: "Você já está neste plano." });
+    }
   };
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userProfile || !userId) return;
-    setIsLoading(true);
+    setIsLoading(true); // For this specific update operation
      try {
       const userDocRef = doc(db, "users", userId);
       const currentDocSnap = await getDoc(userDocRef);
@@ -159,30 +82,35 @@ export default function ProfilePage() {
         setIsLoading(false);
         return;
       }
-      const currentData = currentDocSnap.data() as UserProfileDataFirestore;
+      const currentData = currentDocSnap.data() as AuthUserProfileData; // Use the type from AuthProvider
 
-      const updatedProfileDataFirestore: UserProfileDataFirestore = { 
+      // We expect memberSince and plan to exist, and lastPayment might exist
+      const updatedProfileDataFirestore: AuthUserProfileData = { 
         ...currentData, 
         name: editForm.name, 
-        email: editForm.email, 
+        email: editForm.email, // Email change here is for display, Auth email is separate
         whatsapp: editForm.whatsapp || '',
         cpf: editForm.cpf || '',
+        // Important: Retain existing plan and timestamps unless explicitly changed elsewhere
+        plan: currentData.plan, 
+        memberSince: currentData.memberSince, 
+        lastPayment: currentData.lastPayment, 
       };
       await setDoc(userDocRef, updatedProfileDataFirestore, { merge: true });
-      setUserProfile({
-        ...updatedProfileDataFirestore,
-        memberSince: updatedProfileDataFirestore.memberSince.toDate().toISOString(),
-        lastPayment: updatedProfileDataFirestore.lastPayment?.toDate().toISOString(),
-        whatsapp: updatedProfileDataFirestore.whatsapp || '',
-        cpf: updatedProfileDataFirestore.cpf || '',
-      });
+      // AuthProvider will pick up the change on next full load or if we trigger a refresh of userProfile in useAuth
+      // For immediate UI update, we could update userProfile in AuthContext, but that's more complex.
+      // Let's rely on re-fetch or simply display what was saved.
+      // To simplify, we'll refetch userProfile or trust AuthProvider to update.
+      // For now, let's assume the user reloads or AuthProvider handles it.
+      // The local 'userProfile' from useAuth will eventually update.
+
       setIsEditing(false);
       toast({ title: "Perfil Atualizado", description: "Suas informações foram salvas." });
     } catch (error: any) {
       console.error("Error updating profile:", error, error.stack);
       toast({ variant: "destructive", title: "Erro ao Atualizar Perfil", description: "Verifique o console." });
     }
-    setIsLoading(false);
+    setIsLoading(false); // For this specific update operation
   };
 
   const activityHistory = [
@@ -191,7 +119,7 @@ export default function ProfilePage() {
     { id: 3, date: '19/07/2024', action: 'Sessão com Psicólogo Virtual' },
   ];
   
-  if (isLoading && !userProfile) { 
+  if (isLoading || authProfileLoading) { 
     return (
         <div className="container mx-auto py-8 flex justify-center items-center h-[calc(100vh-200px)]">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -200,7 +128,7 @@ export default function ProfilePage() {
     );
   }
 
-  if (!userProfile && !isLoading) { 
+  if (!userProfile && !authProfileLoading && !profileLoading) { 
     return (
         <div className="container mx-auto py-8 text-center">
             <p className="mb-4">Não foi possível carregar o perfil. Por favor, tente recarregar a página ou fazer login novamente.</p>
@@ -220,7 +148,7 @@ export default function ProfilePage() {
           <Card>
             <CardHeader className="flex flex-row items-start justify-between">
               <div className="flex items-center space-x-4">
-                <UserCircle className="h-12 w-12 text-primary" />
+                {userProfile.plan === 'premium' ? <ShieldCheck className="h-12 w-12 text-primary" /> : <UserCircle className="h-12 w-12 text-primary" />}
                 <div>
                   <CardTitle className="font-headline text-2xl">{userProfile.name}</CardTitle>
                   <CardDescription>{userProfile.email}</CardDescription>
@@ -240,8 +168,8 @@ export default function ProfilePage() {
                   </div>
                   <div>
                     <Label htmlFor="email">Email (informativo)</Label>
-                    <Input id="email" type="email" value={editForm.email} onChange={(e) => setEditForm({...editForm, email: e.target.value})} />
-                    <p className="text-xs text-muted-foreground mt-1">Para alterar o email de login, use as opções do Firebase Auth.</p>
+                    <Input id="email" type="email" value={editForm.email} disabled />
+                    <p className="text-xs text-muted-foreground mt-1">O email de login não pode ser alterado aqui.</p>
                   </div>
                   <div>
                     <Label htmlFor="whatsapp">WhatsApp</Label>
@@ -271,33 +199,32 @@ export default function ProfilePage() {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Plano Atual</p>
-                    <div className="flex items-center gap-2">
-                       <p className="font-semibold text-lg text-primary">{userProfile.plan.toUpperCase()}</p>
-                        <Select value={userProfile.plan} onValueChange={(value: UserPlan) => handlePlanChange(value)} disabled={isLoading}>
-                            <SelectTrigger className="w-[180px] h-8 text-xs">
-                                <SelectValue placeholder="Mudar plano" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="free">Gratuito</SelectItem>
-                                <SelectItem value="pro">Pro (Simular)</SelectItem>
-                                <SelectItem value="vitalicio">Vitalício (Simular)</SelectItem>
-                            </SelectContent>
-                        </Select>
-                         {isLoading && userProfile.plan !== editForm.name && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
+                     <div className="flex items-center gap-2">
+                       <p className="font-semibold text-lg text-primary">{userProfile.plan === 'premium' ? 'Premium' : 'Gratuito'}</p>
+                        {userProfile.plan === 'free' && (
+                             <Button size="sm" variant="outline" onClick={() => handlePlanChangeNavigation('premium')}>
+                                Fazer Upgrade para Premium
+                            </Button>
+                        )}
+                         {userProfile.plan === 'premium' && (
+                             <Button size="sm" variant="ghost" onClick={() => router.push('/pricing')} disabled>
+                                Gerenciar Assinatura (em Planos)
+                            </Button>
+                        )}
                     </div>
                   </div>
-                   {userProfile.lastPayment && (
+                   {userProfile.lastPayment && userProfile.plan === 'premium' && (
                     <div>
-                        <p className="text-sm font-medium text-muted-foreground">Último Pagamento</p>
+                        <p className="text-sm font-medium text-muted-foreground">Último Pagamento (Premium)</p>
                         <p>{new Date(userProfile.lastPayment).toLocaleDateString('pt-BR')}</p>
                     </div>
                    )}
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Membro Desde</p>
-                    <p>{new Date(userProfile.memberSince).toLocaleDateString('pt-BR')}</p>
+                    <p>{userProfile.memberSince ? new Date(userProfile.memberSince).toLocaleDateString('pt-BR') : 'N/A'}</p>
                   </div>
-                  <Button variant="outline" className="w-full sm:w-auto sm:col-span-2" disabled>
-                    <CreditCard className="mr-2 h-4 w-4" /> Gerenciar Assinatura (Em breve)
+                   <Button variant="outline" className="w-full sm:w-auto sm:col-span-2" onClick={() => router.push('/pricing')}>
+                    <CreditCard className="mr-2 h-4 w-4" /> Ver Opções de Planos
                   </Button>
                 </div>
               )}
@@ -345,10 +272,10 @@ export default function ProfilePage() {
               <CardTitle className="font-headline flex items-center"><Settings className="mr-2 h-5 w-5"/>Configurações da Conta</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button variant="outline" className="w-full justify-start" disabled>
+              <Button variant="outline" className="w-full justify-start" disabled={userProfile.plan !== 'premium'}>
                 <Download className="mr-2 h-4 w-4" /> Exportar Dados (.csv) (Premium)
               </Button>
-              <Button variant="outline" className="w-full justify-start" disabled>
+               <Button variant="outline" className="w-full justify-start" disabled>
                 Notificações Push (Em breve)
               </Button>
                <Button variant="destructive" className="w-full justify-start" disabled>

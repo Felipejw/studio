@@ -14,13 +14,14 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { createUserWithEmailAndPassword, auth, setDoc, doc, db, Timestamp } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { LeafIcon, Loader2 } from 'lucide-react';
+import type { UserPlan } from '@/components/auth-provider'; // Import UserPlan type
 
 const signupSchema = z.object({
   name: z.string().min(2, {message: "Nome é obrigatório (mínimo 2 caracteres)."}),
   email: z.string().email({ message: 'Email inválido.' }),
   password: z.string().min(6, { message: 'Senha deve ter pelo menos 6 caracteres.' }),
-  whatsapp: z.string().min(10, {message: "WhatsApp deve ter pelo menos 10 dígitos."}).optional().or(z.literal('')), // Ex: (XX) XXXXX-XXXX
-  cpf: z.string().min(11, {message: "CPF deve ter 11 dígitos."}).optional().or(z.literal('')), // Ex: XXX.XXX.XXX-XX
+  whatsapp: z.string().min(10, {message: "WhatsApp deve ter pelo menos 10 dígitos."}).optional().or(z.literal('')),
+  cpf: z.string().min(11, {message: "CPF deve ter 11 dígitos."}).optional().or(z.literal('')),
 });
 
 type SignupFormValues = z.infer<typeof signupSchema>;
@@ -48,14 +49,15 @@ export default function SignupPage() {
       const user = userCredential.user;
 
       // Create user profile in Firestore
+      const defaultPlan: UserPlan = 'free'; // Default plan is 'free'
       await setDoc(doc(db, "users", user.uid), {
         uid: user.uid,
         email: user.email,
         name: data.name,
         whatsapp: data.whatsapp || '',
         cpf: data.cpf || '',
-        plan: 'free', // Default plan
-        memberSince: Timestamp.fromDate(new Date()), // Use Firestore Timestamp
+        plan: defaultPlan, 
+        memberSince: Timestamp.fromDate(new Date()), 
       });
 
       toast({ title: 'Cadastro realizado!', description: 'Sua conta foi criada. Redirecionando...' });
@@ -84,7 +86,7 @@ export default function SignupPage() {
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4"> {/* Reduced space-y for more compact form */}
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
              <FormField
                 control={form.control}
                 name="name"

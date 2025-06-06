@@ -11,11 +11,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Slider } from '@/components/ui/slider';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { getAiPsychologistResponse, type GetAiPsychologistResponseInput, type GetAiPsychologistResponseOutput } from '@/ai/flows/get-ai-psychologist-response';
-import { Loader2, Sparkles, MessageSquare, Activity } from 'lucide-react';
+import { Loader2, Sparkles, MessageSquare, Activity, ShieldAlert } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { db, collection, addDoc, query, where, orderBy, getDocs, Timestamp } from '@/lib/firebase'; 
 import { useAuth } from '@/components/auth-provider';
+import Link from 'next/link';
 
 const formSchema = z.object({
   feelings: z.string().min(10, { message: "Descreva seus sentimentos com pelo menos 10 caracteres." }),
@@ -36,13 +37,38 @@ interface ChatEntry extends Omit<ChatEntryFirestore, 'timestamp'> {
   timestamp: Date; 
 }
 
+function AccessDeniedPremium() {
+  return (
+    <div className="container mx-auto py-12 flex justify-center items-center">
+      <Card className="w-full max-w-md text-center shadow-lg">
+        <CardHeader>
+          <div className="mx-auto bg-destructive/10 p-3 rounded-full w-fit">
+            <ShieldAlert className="h-10 w-10 text-destructive" />
+          </div>
+          <CardTitle className="mt-4 font-headline text-2xl">Acesso Premium Necessário</CardTitle>
+          <CardDescription>
+            A funcionalidade de Psicólogo Virtual com IA é exclusiva para assinantes do Plano Premium.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-6 text-sm">
+            Faça upgrade para ter acesso a um psicólogo virtual que te ajudará a entender e gerenciar suas emoções no trading.
+          </p>
+          <Button asChild size="lg" className="w-full">
+            <Link href="/pricing">Ver Planos Premium</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 export default function AiPsychologistPage() {
   const [chatHistory, setChatHistory] = useState<ChatEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmittingForm, setIsSubmittingForm] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const { toast } = useToast();
-  const { userId, user } = useAuth();
+  const { user, userId, userProfile, loading: authLoading, profileLoading } = useAuth();
 
   const form = useForm<PsychologistFormValues>({
     resolver: zodResolver(formSchema),
@@ -102,7 +128,7 @@ export default function AiPsychologistPage() {
       toast({ variant: "destructive", title: "Erro de Autenticação", description: "Usuário não autenticado." });
       return;
     }
-    setIsLoading(true);
+    setIsSubmittingForm(true);
     try {
       const response = await getAiPsychologistResponse(data);
       
@@ -128,10 +154,25 @@ export default function AiPsychologistPage() {
         description: `Não foi possível obter resposta da IA ou salvar o log. ${error?.message || 'Verifique o console para mais detalhes.'}`,
       });
     }
-    setIsLoading(false);
+    setIsSubmittingForm(false);
   };
 
-  if (!user) return null;
+  const isLoading = authLoading || profileLoading;
+
+  if (isLoading) {
+     return (
+      <div className="flex h-[calc(100vh-200px)] w-full items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="ml-3">Carregando...</p>
+      </div>
+    );
+  }
+
+  if (!user) return null; // AuthProvider handles redirect
+
+  if (userProfile?.plan !== 'premium' && userProfile?.email !== 'felipejw.fm@gmail.com') { // Admin override for testing
+    return <AccessDeniedPremium />;
+  }
 
   return (
     <div className="container mx-auto py-8">
@@ -181,8 +222,8 @@ export default function AiPsychologistPage() {
                       </FormItem>
                     )}
                   />
-                  <Button type="submit" disabled={isLoading || !userId} className="w-full">
-                    {isLoading ? (
+                  <Button type="submit" disabled={isSubmittingForm || !userId} className="w-full">
+                    {isSubmittingForm ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
                       <Sparkles className="mr-2 h-4 w-4" />
@@ -261,5 +302,3 @@ export default function AiPsychologistPage() {
     </div>
   );
 }
-
-    
