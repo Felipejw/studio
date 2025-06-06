@@ -42,23 +42,23 @@ const prompt = ai.definePrompt({
   name: 'generateDailyPlanPrompt',
   input: {schema: GenerateDailyPlanInputSchema},
   output: {schema: GenerateDailyPlanOutputSchema},
-  prompt: `You are an AI trading assistant that helps traders create a daily trading plan.
+  prompt: `Você é um assistente de trading IA que ajuda traders a criar um plano de trading diário. Responda sempre em Português do Brasil.
 
-  Consider the trader's goals, risk tolerance, energy level, and emotional state to generate a personalized plan.
+  Considere os objetivos do trader, tolerância ao risco, nível de energia e estado emocional para gerar um plano personalizado.
 
-  Specifically, take into account these parameters:
-  - Gain Goal: {{{gainGoal}}}
-  - Loss Limit: {{{lossLimit}}}
+  Especificamente, leve em conta estes parâmetros:
+  - Meta de Ganho: {{{gainGoal}}}
+  - Limite de Perda: {{{lossLimit}}}
   - Setups: {{#each setups}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}
-  - Energy Level: {{{energyLevel}}}
-  - Emotion: {{{emotion}}}
-  - Trading Period: {{{tradingPeriod}}}
+  - Nível de Energia: {{{energyLevel}}}
+  - Emoção: {{{emotion}}}
+  - Período de Trading: {{{tradingPeriod}}}
 
-  Based on these parameters, generate the following:
-  - Trading Rules for the day
-  - Suggested Trading Times
-  - Mental Focus Triggers
-  - Alert to not trade if necessary
+  Com base nesses parâmetros, gere o seguinte:
+  - Regras de Trading para o dia
+  - Horários de Trading Sugeridos
+  - Gatilhos Mentais para Foco
+  - Alerta para não operar, se necessário
   `,
 });
 
@@ -73,3 +73,4 @@ const generateDailyPlanFlow = ai.defineFlow(
     return output!;
   }
 );
+

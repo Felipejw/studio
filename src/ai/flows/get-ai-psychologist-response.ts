@@ -40,6 +40,26 @@ Sentimentos: {{{feelings}}}
 Estado Emocional (0-10): {{{emotionalState}}}
 
 Forneça conselhos personalizados para ajudar o trader a gerenciar suas emoções e melhorar suas decisões de negociação.`,
+  config: {
+    safetySettings: [
+      {
+        category: 'HARM_CATEGORY_HARASSMENT',
+        threshold: 'BLOCK_MEDIUM_AND_ABOVE',
+      },
+      {
+        category: 'HARM_CATEGORY_HATE_SPEECH',
+        threshold: 'BLOCK_MEDIUM_AND_ABOVE',
+      },
+      {
+        category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+        threshold: 'BLOCK_MEDIUM_AND_ABOVE',
+      },
+      {
+        category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
+        threshold: 'BLOCK_MEDIUM_AND_ABOVE',
+      },
+    ],
+  },
 });
 
 const getAiPsychologistResponseFlow = ai.defineFlow(
