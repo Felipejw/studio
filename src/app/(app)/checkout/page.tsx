@@ -3,19 +3,14 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useForm, SubmitHandler } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/components/auth-provider';
 import { db, doc, setDoc, Timestamp, getDoc } from '@/lib/firebase';
-import { Loader2, CreditCard, ShieldCheck, ArrowLeft } from 'lucide-react';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import Link from 'next/link'; // Ensure Link is imported
+import { Loader2, ArrowLeft, Copy, QrCode } from 'lucide-react';
+import Link from 'next/link';
+import Image from 'next/image';
 
 type UserPlan = 'free' | 'pro' | 'vitalicio';
 
@@ -28,21 +23,15 @@ interface UserProfileDataFirestore {
   lastPayment?: Timestamp;
 }
 
-// Placeholder plan details - in a real app, this would come from a config or API
 const planDetails: Record<UserPlan, { name: string; price: string }> = {
   free: { name: 'Plano Gratuito', price: 'R$0/mês' },
   pro: { name: 'Plano Pro', price: 'R$49/mês' },
   vitalicio: { name: 'Plano Vitalício', price: 'R$499 (único)' },
 };
 
-const checkoutSchema = z.object({
-  nameOnCard: z.string().min(3, { message: "Nome no cartão é obrigatório." }),
-  cardNumber: z.string().min(16, { message: "Número do cartão inválido." }).max(19, { message: "Número do cartão inválido." }),
-  expiryDate: z.string().regex(/^(0[1-9]|1[0-2])\/\d{2}$/, { message: "Data de validade inválida (MM/AA)." }),
-  cvv: z.string().min(3, { message: "CVV inválido." }).max(4, { message: "CVV inválido." }),
-});
-
-type CheckoutFormValues = z.infer<typeof checkoutSchema>;
+// Não precisamos mais de um schema de formulário complexo para PIX simulado
+// const checkoutSchema = z.object({ ... });
+// type CheckoutFormValues = z.infer<typeof checkoutSchema>;
 
 function CheckoutPageContent() {
   const router = useRouter();
@@ -51,18 +40,8 @@ function CheckoutPageContent() {
   const { user, userId } = useAuth();
 
   const [selectedPlanId, setSelectedPlanId] = useState<UserPlan | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const form = useForm<CheckoutFormValues>({
-    resolver: zodResolver(checkoutSchema),
-    defaultValues: {
-      nameOnCard: '',
-      cardNumber: '',
-      expiryDate: '',
-      cvv: '',
-    },
-  });
+  const [pixCode] = useState("00020126330014br.gov.bcb.pix01111234567890005204000053039865802BR5913NOME DO RECEBEDOR6008BRASILIA62070503***6304ABCD"); // Placeholder PIX code
 
   useEffect(() => {
     const planId = searchParams.get('planId') as UserPlan;
@@ -74,7 +53,7 @@ function CheckoutPageContent() {
     }
   }, [searchParams, router, toast]);
 
-  const onSubmit: SubmitHandler<CheckoutFormValues> = async (data) => {
+  const handleConfirmPixPayment = async () => {
     if (!userId || !selectedPlanId) {
       toast({ variant: "destructive", title: "Erro", description: "Usuário não autenticado ou plano não selecionado." });
       return;
@@ -87,7 +66,6 @@ function CheckoutPageContent() {
       if (!userDocSnap.exists()) {
         throw new Error("Perfil de usuário não encontrado.");
       }
-      const currentData = userDocSnap.data() as UserProfileDataFirestore;
       
       const updatedProfileData: Partial<UserProfileDataFirestore> = {
         plan: selectedPlanId,
@@ -101,7 +79,7 @@ function CheckoutPageContent() {
 
       toast({
         title: "Assinatura Confirmada!",
-        description: `Você agora está no ${planDetails[selectedPlanId].name}.`,
+        description: `Seu pagamento PIX (simulado) foi confirmado. Você agora está no ${planDetails[selectedPlanId].name}.`,
       });
       router.push('/profile'); 
     } catch (error: any) {
@@ -109,6 +87,14 @@ function CheckoutPageContent() {
       toast({ variant: "destructive", title: "Erro na Assinatura", description: error.message || "Não foi possível atualizar seu plano." });
     }
     setIsSubmitting(false);
+  };
+
+  const copyPixCode = () => {
+    navigator.clipboard.writeText(pixCode);
+    toast({
+      title: "PIX Copiado!",
+      description: "O código PIX Copia e Cola foi copiado para sua área de transferência.",
+    });
   };
 
   if (!selectedPlanId) {
@@ -120,7 +106,7 @@ function CheckoutPageContent() {
   }
 
   return (
-    <div className="container mx-auto py-12 max-w-2xl">
+    <div className="container mx-auto py-12 max-w-md">
       <Button variant="outline" onClick={() => router.back()} className="mb-6">
         <ArrowLeft className="mr-2 h-4 w-4" /> Voltar para Planos
       </Button>
@@ -128,76 +114,51 @@ function CheckoutPageContent() {
       <Card className="shadow-xl">
         <CardHeader>
           <div className="flex justify-center mb-4">
-             <CreditCard className="h-12 w-12 text-primary"/>
+             <QrCode className="h-12 w-12 text-primary"/>
           </div>
-          <CardTitle className="text-2xl font-bold text-center font-headline">Checkout Seguro</CardTitle>
+          <CardTitle className="text-2xl font-bold text-center font-headline">Pagamento via PIX</CardTitle>
           <CardDescription className="text-center">
             Você está assinando o: <span className="font-semibold text-primary">{planDetails[selectedPlanId].name}</span> por <span className="font-semibold">{planDetails[selectedPlanId].price}</span>.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <FormField
-                control={form.control}
-                name="nameOnCard"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nome no Cartão</FormLabel>
-                    <FormControl><Input placeholder="Nome como aparece no cartão" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+        <CardContent className="space-y-6">
+          <div className="text-center">
+            <p className="text-sm text-muted-foreground mb-2">Escaneie o QR Code abaixo com seu app de pagamentos:</p>
+            <div className="flex justify-center my-4">
+              <Image 
+                src="https://placehold.co/256x256.png" 
+                alt="PIX QR Code" 
+                width={200} 
+                height={200}
+                className="rounded-md border"
+                data-ai-hint="QR code"
               />
-              <FormField
-                control={form.control}
-                name="cardNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Número do Cartão</FormLabel>
-                    <FormControl><Input placeholder="0000 0000 0000 0000" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="expiryDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Validade (MM/AA)</FormLabel>
-                      <FormControl><Input placeholder="MM/AA" {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="cvv"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>CVV</FormLabel>
-                      <FormControl><Input placeholder="123" {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground text-center">
-                <ShieldCheck className="inline h-4 w-4 mr-1 text-green-600" />
-                Este é um checkout simulado. Nenhuma informação de pagamento real será processada ou armazenada.
-              </p>
-              <Button type="submit" className="w-full text-lg py-3" disabled={isSubmitting || !user}>
-                {isSubmitting ? (
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                ) : (
-                  <CreditCard className="mr-2 h-5 w-5" />
-                )}
-                Confirmar Assinatura ({planDetails[selectedPlanId].price})
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground text-center">Ou use o PIX Copia e Cola:</p>
+            <div className="bg-muted p-3 rounded-md text-sm break-all relative">
+              <code>{pixCode}</code>
+              <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7" onClick={copyPixCode}>
+                <Copy className="h-4 w-4"/>
+                <span className="sr-only">Copiar código PIX</span>
               </Button>
-            </form>
-          </Form>
+            </div>
+          </div>
+          
+          <p className="text-xs text-muted-foreground text-center">
+            Este é um processo de pagamento PIX simulado. Nenhum pagamento real será processado.
+          </p>
+
+          <Button onClick={handleConfirmPixPayment} className="w-full text-lg py-3" disabled={isSubmitting || !user}>
+            {isSubmitting ? (
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+            ) : (
+              <QrCode className="mr-2 h-5 w-5" />
+            )}
+            Já Paguei / Confirmar Assinatura
+          </Button>
         </CardContent>
       </Card>
        <p className="text-center mt-6 text-sm text-muted-foreground">
@@ -214,4 +175,4 @@ export default function CheckoutPage() {
     </Suspense>
   );
 }
-
+    
