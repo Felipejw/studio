@@ -68,10 +68,10 @@ const MarketAssetCard: React.FC<MarketAssetProps> = ({ name, trend, volume, icon
 
 
 interface EconomicEventClientProps {
-  time: string; // Formatted time string
+  time: string; 
   event: string;
-  impact: 'Muito Alto' | 'Alto' | 'Médio' | 'Baixo' | 'N/A';
-  country: string; // e.g., "EUA", "Brasil", "Eurozona"
+  impact: 'Muito Alto' | 'Alto' | 'Médio' | 'Baixo' | 'N/A' | 'N/D';
+  country: string; 
   actual?: string;
   forecast?: string;
   previous?: string;
@@ -95,6 +95,11 @@ const EconomicEventItem: React.FC<EconomicEventClientProps> = ({ time, event, im
       impactColorClass = 'bg-green-500/20 text-green-600 dark:text-green-400';
       impactIconColor = 'text-green-500 dark:text-green-400';
       break;
+    case 'N/A':
+    case 'N/D':
+       impactColorClass = 'bg-muted/30 text-muted-foreground';
+       impactIconColor = 'text-muted-foreground';
+       break;
   }
 
   return (
@@ -120,20 +125,26 @@ const EconomicEventItem: React.FC<EconomicEventClientProps> = ({ time, event, im
   );
 };
 
-interface StockQuote {
+interface StockQuoteAPI {
   symbol: string;
   name: string;
   price: number;
-  change_percent: number;
+  change_percent?: number; // BrasilAPI might not always provide this
+  changesPercentage?: number; // BrasilAPI uses this for stocks
   volume: number;
+  market_cap?: number; // BrasilAPI
+  logo?: string; // BrasilAPI
+  sector?: string; // BrasilAPI
+  type?: string; // BrasilAPI
 }
+
 
 interface FinnhubEventAPI {
   actual?: number | null;
   country: string;
   estimate?: number | null;
   event: string;
-  impact?: number | null; // 0 (Low), 1 (Medium), 2 (High), 3 (Very High)
+  impact?: number | string | null; // Can be number (0,1,2,3) or string ("Low", "High")
   prev?: number | null;
   time: string; // "2024-07-26 12:30:00"
   unit: string;
@@ -158,33 +169,57 @@ export default function MarketOverviewPage() {
         const response = await fetch('/api/economic-calendar');
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+          let detailedErrorMessage = errorData.error || `HTTP error! status: ${response.status}`;
+          
+          if (errorData.finnhubStatus === 403) {
+            detailedErrorMessage = "Acesso Proibido (403) pela API da Finnhub. Verifique se sua chave de API (NEXT_PUBLIC_FINNHUB_API_KEY no .env) é válida, ativa e se sua conta tem permissão para este endpoint. A chave pode levar alguns minutos para ativar após a criação.";
+          } else if (errorData.finnhubStatus === 401) {
+            detailedErrorMessage = "Não Autorizado (401) pela API da Finnhub. A chave de API pode estar incorreta ou ausente na requisição à Finnhub.";
+          }
+          console.error("Frontend error from /api/economic-calendar:", detailedErrorMessage, "Full error data:", errorData);
+          throw new Error(detailedErrorMessage);
         }
         const data: FinnhubEventAPI[] = await response.json();
         
-        const impactMap: { [key: number]: EconomicEventClientProps['impact'] } = {
+        const impactMapText: { [key: string]: EconomicEventClientProps['impact'] } = {
+          "low": 'Baixo', "medium": 'Médio', "high": 'Alto',
+        };
+        const impactMapNumeric: { [key: number]: EconomicEventClientProps['impact'] } = {
           0: 'Baixo', 1: 'Médio', 2: 'Alto', 3: 'Muito Alto'
         };
 
         const countryNameMap: { [key: string]: string } = {
           "US": "EUA", "DE": "Alemanha", "BR": "Brasil", "CN": "China", "JP": "Japão", "GB": "Reino Unido",
           "EU": "Zona do Euro", "CA": "Canadá", "AU": "Austrália", "NZ": "Nova Zelândia", "CH": "Suíça",
+          "FR": "França", "IT": "Itália", "ES": "Espanha", "IN": "Índia", "RU": "Rússia",
+          "ZA": "África do Sul", "MX": "México", "SG": "Singapura", "HK": "Hong Kong", "KR": "Coreia do Sul"
         };
         
         const clientEvents = data
-          .filter(event => event.country && ["US", "BR", "EU", "CN", "DE", "GB"].includes(event.country.toUpperCase())) // Filter for major economies
-          .map(event => ({
-            time: new Date(event.time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }),
-            event: event.event,
-            impact: event.impact !== null && event.impact !== undefined ? (impactMap[event.impact] || 'N/A') : 'N/A',
-            country: countryNameMap[event.country.toUpperCase()] || event.country,
-            actual: event.actual !== null && event.actual !== undefined ? `${event.actual}${event.unit || ''}` : 'N/A',
-            forecast: event.estimate !== null && event.estimate !== undefined ? `${event.estimate}${event.unit || ''}` : 'N/A',
-            previous: event.prev !== null && event.prev !== undefined ? `${event.prev}${event.unit || ''}` : 'N/A',
-          }));
+          .filter(event => event.country && ["US", "BR", "EU", "CN", "DE", "GB", "JP", "CA", "AU"].includes(event.country.toUpperCase())) 
+          .map(event => {
+            let mappedImpact: EconomicEventClientProps['impact'] = 'N/D';
+            if (event.impact !== null && event.impact !== undefined) {
+              if (typeof event.impact === 'string') {
+                mappedImpact = impactMapText[event.impact.toLowerCase()] || 'N/A';
+              } else if (typeof event.impact === 'number') {
+                mappedImpact = impactMapNumeric[event.impact] || (event.impact > 3 ? 'Muito Alto' : 'N/A');
+              }
+            }
+
+            return {
+              time: new Date(event.time).toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }),
+              event: event.event,
+              impact: mappedImpact,
+              country: countryNameMap[event.country.toUpperCase()] || event.country,
+              actual: event.actual !== null && event.actual !== undefined ? `${event.actual}${event.unit || ''}` : undefined,
+              forecast: event.estimate !== null && event.estimate !== undefined ? `${event.estimate}${event.unit || ''}` : undefined,
+              previous: event.prev !== null && event.prev !== undefined ? `${event.prev}${event.unit || ''}` : undefined,
+            };
+          });
         setEconomicEvents(clientEvents);
       } catch (e: any) {
-        console.error("Failed to fetch economic events:", e);
+        console.error("Failed to fetch or process economic events:", e);
         setErrorEvents(e.message || "Erro ao carregar calendário econômico.");
       }
       setIsLoadingEvents(false);
@@ -199,11 +234,11 @@ export default function MarketOverviewPage() {
           const errorData = await response.json();
           throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
         }
-        const data: StockQuote[] = await response.json();
+        const data: StockQuoteAPI[] = await response.json();
         const mappedData = data.map(stock => ({
           name: `${stock.name} (${stock.symbol})`,
           price: stock.price,
-          changePercent: stock.change_percent,
+          changePercent: stock.changesPercentage ?? stock.change_percent ?? 0, // Use changesPercentage from BrasilAPI if available
           volume: stock.volume,
           dataAiHint: `${stock.name.toLowerCase()} stock chart`
         }));
@@ -212,7 +247,6 @@ export default function MarketOverviewPage() {
        {
         console.error("Failed to fetch stock quotes:", e);
         setErrorQuotes(e.message || "Erro ao carregar cotações.");
-        // Keep placeholder for Ibovespa if quotes fail
         setStockData([{ name: "Ibovespa (Ações)", trend: "Lateral", dataAiHint: "stocks chart"}]);
       }
       setIsLoadingQuotes(false);
@@ -224,16 +258,16 @@ export default function MarketOverviewPage() {
 
 
   const assetsToShowInitially: MarketAssetProps[] = [
-    { name: "Índice Futuro (WIN)", trend: "N/A", volume: "Carregando...", icon: <Loader2 className="h-4 w-4 text-muted-foreground animate-spin"/>, dataAiHint:"index chart" },
-    { name: "Dólar Futuro (WDO)", trend: "N/A", volume: "Carregando...", icon: <Loader2 className="h-4 w-4 text-muted-foreground animate-spin"/>, dataAiHint:"currency chart" },
-    { name: "Ibovespa (Ações)", trend: "Lateral", dataAiHint: "stocks chart"} // Placeholder for Ibovespa
+    { name: "Ibovespa (IBOV)", trend: "N/A", volume: "Carregando...", icon: <Loader2 className="h-4 w-4 text-muted-foreground animate-spin"/>, dataAiHint:"index chart" },
+    { name: "PETR4", trend: "N/A", volume: "Carregando...", icon: <Loader2 className="h-4 w-4 text-muted-foreground animate-spin"/>, dataAiHint:"petrobras chart" },
+    { name: "VALE3", trend: "N/A", volume: "Carregando...", icon: <Loader2 className="h-4 w-4 text-muted-foreground animate-spin"/>, dataAiHint:"vale chart" },
   ];
   
-  const displayStockData = isLoadingQuotes 
+  const displayStockData = isLoadingQuotes && stockData.length === 0
     ? assetsToShowInitially 
     : stockData.length > 0 
       ? stockData 
-      : [{ name: "Ibovespa (Ações)", trend: "Lateral", dataAiHint: "stocks chart"}];
+      : [{ name: "Dados de cotações indisponíveis", trend: "N/A", dataAiHint: "error stocks"}];
 
 
   return (
@@ -242,7 +276,7 @@ export default function MarketOverviewPage() {
       
       <section className="mb-8">
         <h2 className="text-2xl font-semibold mb-4 font-headline">Tendência de Ativos</h2>
-        {isLoadingQuotes && (
+        {(isLoadingQuotes && stockData.length === 0) && (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {assetsToShowInitially.map(asset => <MarketAssetCard key={asset.name} {...asset} />)}
           </div>
@@ -255,7 +289,7 @@ export default function MarketOverviewPage() {
             </CardHeader>
           </Card>
         )}
-        {!isLoadingQuotes && !errorQuotes && (
+        {(!isLoadingQuotes || stockData.length > 0) && !errorQuotes && (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {displayStockData.map(asset => <MarketAssetCard key={asset.name} {...asset} />)}
           </div>
@@ -316,15 +350,20 @@ export default function MarketOverviewPage() {
             {isLoadingEvents && (
                 <div className="flex items-center justify-center py-10">
                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                    <p className="ml-3 text-sm">Carregando eventos...</p>
+                    <p className="ml-3 text-sm">Carregando eventos econômicos...</p>
                 </div>
             )}
             {!isLoadingEvents && errorEvents && (
               <Card className="border-destructive bg-destructive/10 m-4">
                 <CardHeader>
                   <CardTitle className="text-destructive flex items-center"><AlertTriangle className="mr-2"/> Erro ao Carregar Calendário</CardTitle>
-                  <CardDescription className="text-destructive/80">{errorEvents}</CardDescription>
                 </CardHeader>
+                <CardContent className="pt-4">
+                   <AlertDescription className="text-destructive/90">{errorEvents}</AlertDescription>
+                   {errorEvents.includes("NEXT_PUBLIC_FINNHUB_API_KEY") && 
+                    <p className="text-xs text-destructive/70 mt-2">Verifique se a chave NEXT_PUBLIC_FINNHUB_API_KEY está corretamente configurada no arquivo .env (ou .env.local) na raiz do projeto e se o servidor Next.js foi reiniciado após a alteração.</p>
+                   }
+                </CardContent>
               </Card>
             )}
             {!isLoadingEvents && !errorEvents && economicEvents.length > 0 && (
@@ -333,7 +372,7 @@ export default function MarketOverviewPage() {
               ))
             )}
             {!isLoadingEvents && !errorEvents && economicEvents.length === 0 && (
-              <p className="text-muted-foreground text-center py-10">Nenhum evento econômico importante para os próximos dias ou dados indisponíveis.</p>
+              <p className="text-muted-foreground text-center py-10">Nenhum evento econômico relevante encontrado para os próximos dias ou dados indisponíveis.</p>
             )}
           </CardContent>
         </Card>
@@ -341,5 +380,3 @@ export default function MarketOverviewPage() {
     </div>
   );
 }
-
-    

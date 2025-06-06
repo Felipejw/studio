@@ -6,9 +6,10 @@ interface FinnhubEconomicEvent {
   country: string; // e.g., "US", "DE", "BR"
   estimate?: number | null;
   event: string; // Description of the event
-  impact?: number | null; // Usually 0 (Low), 1 (Medium), 2 (High), 3 (Very High) or similar
+  impact?: string | null; // Finnhub API docs mention impact as string, but it can be number too.
+                           // Example values: "Low", "Medium", "High", or sometimes numbers like 0, 1, 2.
   prev?: number | null;
-  time: string; // e.g., "2024-07-26 12:30:00"
+  time: string; // e.g., "2024-07-26 12:30:00" (UTC time typically)
   unit: string;
   symbol?: string; // Often related to the currency or market
 }
@@ -16,9 +17,17 @@ interface FinnhubEconomicEvent {
 export async function GET() {
   const apiKey = process.env.NEXT_PUBLIC_FINNHUB_API_KEY;
 
+  // Server-side log to check if API key is loaded
+  if (process.env.NODE_ENV === 'development') { // Log only in development
+    console.log(
+      '[API Route /api/economic-calendar] Attempting to use Finnhub API Key:',
+      apiKey ? `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}` : 'API Key is UNDEFINED in .env'
+    );
+  }
+
   if (!apiKey) {
-    console.error("Finnhub API key is missing.");
-    return NextResponse.json({ error: "API key is missing. Configure NEXT_PUBLIC_FINNHUB_API_KEY in .env.local" }, { status: 500 });
+    console.error("[API Route /api/economic-calendar] Finnhub API key is missing from environment variables. Ensure NEXT_PUBLIC_FINNHUB_API_KEY is set in .env (or .env.local) and the server was restarted.");
+    return NextResponse.json({ error: "Server configuration error: API key for Finnhub is missing. Please contact support or check server logs." }, { status: 500 });
   }
 
   const today = new Date();
@@ -33,18 +42,33 @@ export async function GET() {
   try {
     const response = await fetch(url);
     if (!response.ok) {
-      const errorBody = await response.text();
-      console.error(`Finnhub API error: ${response.status} ${response.statusText}`, errorBody);
-      return NextResponse.json({ error: `Failed to fetch economic calendar: ${response.statusText}`, details: errorBody }, { status: response.status });
+      const errorBodyText = await response.text(); // Read body as text first
+      let finnhubErrorMessage = `Failed to fetch economic calendar: ${response.statusText} (Status: ${response.status})`;
+      let errorDetails = errorBodyText;
+
+      try {
+        const parsedError = JSON.parse(errorBodyText); // Try to parse as JSON
+        if (parsedError && parsedError.error) {
+          finnhubErrorMessage = parsedError.error;
+        }
+      } catch (e) {
+        // If parsing fails, errorBodyText is likely not JSON, use it directly or part of it
+        if (errorBodyText.length > 150) { // Avoid overly long plain text errors
+            errorDetails = errorBodyText.substring(0,150) + "...";
+        }
+      }
+      
+      console.error(`[API Route /api/economic-calendar] Finnhub API error: ${response.status} ${response.statusText}. Response body: ${errorBodyText}`);
+      return NextResponse.json({ error: finnhubErrorMessage, details: errorDetails, finnhubStatus: response.status }, { status: response.status });
     }
+    
     const data = await response.json();
     
     if (!data || !data.economicCalendar) {
-         console.warn("Finnhub API returned no economicCalendar data or unexpected format:", data);
-         return NextResponse.json([]); // Return empty array if no data
+         console.warn("[API Route /api/economic-calendar] Finnhub API returned no economicCalendar data or unexpected format:", data);
+         return NextResponse.json([]); 
     }
 
-    // Sort events by time
     const sortedEvents = (data.economicCalendar as FinnhubEconomicEvent[]).sort((a, b) => {
         return new Date(a.time).getTime() - new Date(b.time).getTime();
     });
@@ -52,7 +76,7 @@ export async function GET() {
     return NextResponse.json(sortedEvents);
 
   } catch (error: any) {
-    console.error("Error fetching or processing economic calendar data:", error);
+    console.error("[API Route /api/economic-calendar] Error fetching or processing economic calendar data:", error);
     return NextResponse.json({ error: "Internal server error fetching economic calendar.", details: error.message }, { status: 500 });
   }
 }
