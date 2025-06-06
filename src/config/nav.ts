@@ -1,6 +1,6 @@
 
 import type { LucideIcon } from 'lucide-react';
-import { LayoutDashboard, FileText, BookOpenText, Brain, Gauge, User, TrendingUp, DollarSign } from 'lucide-react'; // Added DollarSign
+import { LayoutDashboard, FileText, BookOpenText, Brain, Gauge, User, TrendingUp, DollarSign, Repeat } from 'lucide-react';
 
 export interface NavItem {
   title: string;
@@ -35,6 +35,12 @@ export const navItems: NavItem[] = [
     icon: TrendingUp,
     label: 'Visão Geral do Mercado',
   },
+   {
+    title: 'Market Replay',
+    href: '/market-replay',
+    icon: Repeat, // Using Repeat icon
+    label: 'Simulação de Mercado',
+  },
   {
     title: 'Psicólogo Virtual',
     href: '/ai-psychologist',
@@ -48,7 +54,7 @@ export const navItems: NavItem[] = [
     label: 'Controle de Risco',
   },
   {
-    title: 'Planos', // New Pricing Page
+    title: 'Planos',
     href: '/pricing',
     icon: DollarSign,
     label: 'Nossos Planos',

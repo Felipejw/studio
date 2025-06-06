@@ -15,7 +15,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { PlusCircle, Filter, ListChecks, TrendingUp, Meh, Repeat, CalendarIcon, Loader2, Sun, Moon, CloudSun, Trash2, BarChart3, LineChart } from 'lucide-react';
+import { PlusCircle, Filter, ListChecks, TrendingUp, Meh, Repeat, CalendarIcon, Loader2, Sun, Moon, CloudSun, Trash2, BarChart3, LineChart, ThumbsUp, ThumbsDown, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -120,7 +120,6 @@ export default function TradeLogPage() {
       setTrades([]);
       return;
     }
-    console.log("Attempting to fetch trades for userId:", userId); 
     setIsLoadingTrades(true);
     try {
       const q = query(
@@ -130,7 +129,7 @@ export default function TradeLogPage() {
       );
       const querySnapshot = await getDocs(q);
       const fetchedTrades: TradeEntry[] = [];
-      querySnapshot.forEach((docSnap) => { // Renamed doc to docSnap to avoid conflict
+      querySnapshot.forEach((docSnap) => {
         const data = docSnap.data() as Partial<TradeEntryFirestore>; 
         if (data.date && typeof (data.date as any).toDate === 'function') {
           fetchedTrades.push({ 
@@ -145,10 +144,6 @@ export default function TradeLogPage() {
       setTrades(fetchedTrades);
     } catch (error: any) {
       console.error("Erro DETALHADO ao CARREGAR trades (objeto completo):", error);
-      console.error("Mensagem de erro (carregar trades):", error.message);
-      console.error("Código do erro (carregar trades):", error.code);
-      console.error("Stack do erro (carregar trades):", error.stack);
-
       let description = `Não foi possível buscar seus trades.`;
       if (error.code === 'failed-precondition' && error.message && error.message.includes("index")) {
         description = `O Firestore requer um ÍNDICE para esta consulta. Verifique o CONSOLE do navegador para o LINK para criar o índice. Cód: ${error.code || 'failed-precondition'}`;
@@ -224,9 +219,6 @@ export default function TradeLogPage() {
       fetchTrades(); 
     } catch (error: any) {
       console.error("Erro DETALHADO ao SALVAR trade (objeto completo):", error);
-      console.error("Mensagem de erro (salvar trade):", error.message);
-      console.error("Código do erro (salvar trade):", error.code);
-      console.error("Stack do erro (salvar trade):", error.stack);
       toast({
         variant: "destructive",
         title: "Erro ao Salvar Trade",
@@ -269,7 +261,7 @@ export default function TradeLogPage() {
     filterDayEnd.setHours(23, 59, 59, 999);
 
     return trades.filter(trade => {
-        const tradeDate = trade.date; // Already a Date object
+        const tradeDate = trade.date;
         return tradeDate >= filterDayStart && tradeDate <= filterDayEnd;
     });
   }, [trades, filterDate]);
@@ -280,11 +272,10 @@ export default function TradeLogPage() {
 
   const chartDataPL = useMemo(() => {
     if (filteredTrades.length === 0) return [];
-    // If a specific day is filtered, show trades individually, otherwise aggregate by day
     if (filterDate) {
       return filteredTrades
-        .sort((a,b) => a.date.getTime() - b.date.getTime()) // Sort by time within the day
-        .map((trade, index) => ({
+        .sort((a,b) => a.date.getTime() - b.date.getTime()) 
+        .map((trade) => ({
           name: `${format(trade.date, 'HH:mm')} (${trade.asset.substring(0,6)})`,
           profit: trade.profit
         }));
@@ -313,7 +304,7 @@ export default function TradeLogPage() {
      if (filterDate) {
         return filteredTrades
             .sort((a,b) => a.date.getTime() - b.date.getTime())
-            .map((trade, index) => ({
+            .map((trade) => ({
             name: `${format(trade.date, 'HH:mm')} (${trade.asset.substring(0,6)})`,
             emotionBefore: trade.emotionBefore,
             emotionAfter: trade.emotionAfter,
@@ -350,7 +341,10 @@ export default function TradeLogPage() {
     const avgWin = winningTrades.length > 0 ? totalWinAmount / winningTrades.length : 0;
     const avgLoss = losingTrades.length > 0 ? totalLossAmount / losingTrades.length : 0;
     
-    const payoffRatio = avgLoss > 0 ? avgWin / avgLoss : 0;
+    const payoffRatio = avgLoss > 0 ? avgWin / avgLoss : (avgWin > 0 ? Infinity : 0);
+
+    const highestWin = winningTrades.length > 0 ? Math.max(...winningTrades.map(t => t.profit)) : 0;
+    const biggestLoss = losingTrades.length > 0 ? Math.min(...losingTrades.map(t => t.profit)) : 0; // Will be negative or zero
 
     return {
       avgWin,
@@ -358,6 +352,8 @@ export default function TradeLogPage() {
       payoffRatio,
       numWinningTrades: winningTrades.length,
       numLosingTrades: losingTrades.length,
+      highestWin,
+      biggestLoss: Math.abs(biggestLoss), // Display as positive value
     };
   }, [filteredTrades]);
 
@@ -752,36 +748,54 @@ export default function TradeLogPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="font-headline flex items-center"><Repeat className="mr-2 h-5 w-5 text-primary"/>Desempenho Médio</CardTitle>
-             <CardDescription>Lucro e prejuízo médio por trade.</CardDescription>
+            <CardTitle className="font-headline flex items-center"><Repeat className="mr-2 h-5 w-5 text-primary"/>Desempenho Detalhado</CardTitle>
+             <CardDescription>Métricas chave dos trades filtrados.</CardDescription>
           </CardHeader>
-          <CardContent className="h-80">
+          <CardContent className="h-80 text-sm">
             {isLoadingTrades ? (<Loader2 className="mx-auto mt-12 h-8 w-8 animate-spin text-primary" />) : 
              filteredTrades.length > 0 ? (
             <>
-                <div className="space-y-2 mb-4 text-sm">
-                    <div className="flex justify-between"><span>Trades Vencedores:</span> <span className="font-semibold">{performanceMetrics.numWinningTrades}</span></div>
-                    <div className="flex justify-between"><span>Trades Perdedores:</span> <span className="font-semibold">{performanceMetrics.numLosingTrades}</span></div>
+                <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="flex items-center"><ThumbsUp className="mr-2 h-4 w-4 text-green-500"/>Trades Vencedores:</span> 
+                      <span className="font-semibold">{performanceMetrics.numWinningTrades}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="flex items-center"><ThumbsDown className="mr-2 h-4 w-4 text-red-500"/>Trades Perdedores:</span> 
+                      <span className="font-semibold">{performanceMetrics.numLosingTrades}</span>
+                    </div>
+                     <hr className="my-1"/>
                     <div className="flex justify-between"><span>Lucro Médio (Gain):</span> <span className="font-semibold text-green-600">R$ {performanceMetrics.avgWin.toFixed(2)}</span></div>
                     <div className="flex justify-between"><span>Prejuízo Médio (Loss):</span> <span className="font-semibold text-red-600">R$ {performanceMetrics.avgLoss.toFixed(2)}</span></div>
-                    <div className="flex justify-between"><span>Taxa Lucro/Prejuízo (Payoff):</span> <span className="font-semibold">{performanceMetrics.payoffRatio.toFixed(2)}</span></div>
+                    <div className="flex justify-between"><span>Taxa Lucro/Prejuízo (Payoff):</span> <span className="font-semibold">{performanceMetrics.payoffRatio === Infinity ? "Infinito" : performanceMetrics.payoffRatio.toFixed(2)}</span></div>
+                    <hr className="my-1"/>
+                    <div className="flex justify-between items-center">
+                        <span className="flex items-center"><ArrowUpCircle className="mr-2 h-4 w-4 text-green-500"/>Maior Ganho:</span> 
+                        <span className="font-semibold text-green-600">R$ {performanceMetrics.highestWin.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                        <span className="flex items-center"><ArrowDownCircle className="mr-2 h-4 w-4 text-red-500"/>Maior Perda:</span> 
+                        <span className="font-semibold text-red-600">R$ {performanceMetrics.biggestLoss.toFixed(2)}</span>
+                    </div>
                 </div>
-                <ChartContainer config={chartConfigBase} className="h-[150px] w-full">
-                    <RechartsBarChart data={payoffChartData} layout="vertical" margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                        <XAxis type="number" hide />
-                        <YAxis dataKey="name" type="category" hide />
-                        <RechartsTooltip 
-                            cursor={{fill: 'hsl(var(--muted))'}}
-                            content={<ChartTooltipContent indicator="dot" hideLabel />} 
-                            formatter={(value: number) => `R$ ${value.toFixed(2)}`}
-                        />
-                        <RechartsBar dataKey="value" radius={[4, 4, 4, 4]} barSize={30}>
-                             <Cell fill="hsl(var(--chart-2))" />
-                             <Cell fill="hsl(var(--destructive))" />
-                        </RechartsBar>
-                    </RechartsBarChart>
-                </ChartContainer>
+                {payoffChartData[0].value > 0 || payoffChartData[1].value > 0 ? (
+                    <ChartContainer config={chartConfigBase} className="h-[100px] w-full mt-3">
+                        <RechartsBarChart data={payoffChartData} layout="vertical" margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                            <XAxis type="number" hide />
+                            <YAxis dataKey="name" type="category" hide />
+                            <RechartsTooltip 
+                                cursor={{fill: 'hsl(var(--muted))'}}
+                                content={<ChartTooltipContent indicator="dot" hideLabel />} 
+                                formatter={(value: number) => `R$ ${value.toFixed(2)}`}
+                            />
+                            <RechartsBar dataKey="value" radius={[4, 4, 4, 4]} barSize={20}>
+                                <Cell fill="hsl(var(--chart-2))" />
+                                <Cell fill="hsl(var(--destructive))" />
+                            </RechartsBar>
+                        </RechartsBarChart>
+                    </ChartContainer>
+                ) : null}
             </>
             ) : (<p className="text-center text-muted-foreground pt-10">Sem dados de desempenho para exibir.</p>)}
           </CardContent>
@@ -790,6 +804,4 @@ export default function TradeLogPage() {
     </div>
   );
 }
-
-
     
