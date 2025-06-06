@@ -25,7 +25,7 @@ const initialWeeklyPLData = [
 const chartConfig = {
   pl: {
     label: "P/L",
-    color: "hsl(var(--primary))",
+    color: "hsl(var(--chart-1))", // Changed from primary to chart-1
   },
 } satisfies ChartConfig;
 
@@ -59,44 +59,16 @@ export default function DashboardPage() {
       try {
         // TODO: Replace with actual data fetching logic from Firestore
         
-        // Summary Data
-        // Example: const plan = await getDailyPlanStatus(user.uid); setDailyPlanExists(!!plan);
         setDailyPlanExists(false); 
-        // Example: const summary = await getTradesSummary(user.uid);
-        // setTradesToday(summary.count);
-        // setProfitOrLoss(summary.totalPL);
-        // setAverageEmotion(summary.avgEmotion);
-        setTradesToday(0); // Placeholder
-        setProfitOrLoss(0.00); // Placeholder
-        setAverageEmotion("N/A"); // Placeholder
+        setTradesToday(0); 
+        setProfitOrLoss(0.00); 
+        setAverageEmotion("N/A"); 
         
-        // Alerts Data
-        // Example: const alerts = await getUserAlertConditions(user.uid);
-        // setLossLimitReached(alerts.lossLimit);
-        // setTradingOutsideHours(alerts.tradingHours);
-        setLossLimitReached(false); // Placeholder
-        setTradingOutsideHours(false); // Placeholder
+        setLossLimitReached(false); 
+        setTradingOutsideHours(false); 
 
-        // Performance Data
-        // Example: const performance = await getPerformanceMetrics(user.uid);
-        // setWinRate(performance.winRate);
-        // setAvgRiskReward(performance.avgRR);
-        // setWeeklyPLData(performance.weeklyPL);
-        setWinRate(0); // Placeholder
-        setAvgRiskReward("0:0"); // Placeholder
-        // Example data for weekly P/L
-        const examplePL = [
-          { day: 'Dom', pl: Math.random() * 100 - 50 },
-          { day: 'Seg', pl: Math.random() * 100 - 50 },
-          { day: 'Ter', pl: Math.random() * 100 - 50 },
-          { day: 'Qua', pl: Math.random() * 100 - 50 },
-          { day: 'Qui', pl: Math.random() * 100 - 50 },
-          { day: 'Sex', pl: Math.random() * 100 - 50 },
-          { day: 'Sáb', pl: Math.random() * 100 - 50 },
-        ];
-        // To make the chart look a bit more realistic for a dev placeholder:
-        // setWeeklyPLData(examplePL.map(item => ({...item, pl: parseFloat(item.pl.toFixed(0))})));
-        // For now, let's set it to zero until real data is fetched
+        setWinRate(0); 
+        setAvgRiskReward("0:0"); 
         setWeeklyPLData(initialWeeklyPLData);
 
 
@@ -212,7 +184,7 @@ export default function DashboardPage() {
                         <p className="text-xl font-semibold">{winRate}%</p>
                     </div>
                     <div className="p-3 bg-card rounded-lg border">
-                        <TrendingUp className="h-6 w-6 mx-auto mb-1 text-primary" /> {/* Could use Repeat icon for R/R */}
+                        <TrendingUp className="h-6 w-6 mx-auto mb-1 text-primary" />
                         <p className="text-sm text-muted-foreground">R/R Médio</p>
                         <p className="text-xl font-semibold">{avgRiskReward}</p>
                     </div>
@@ -243,7 +215,7 @@ export default function DashboardPage() {
             <CardTitle className="font-headline">Acesso Rápido</CardTitle>
             <CardDescription>Principais ações da plataforma.</CardDescription>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-3">
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Button asChild variant="outline" className="h-auto py-3 text-xs sm:text-sm">
               <Link href="/trade-log" className="flex flex-col items-center text-center">
                 <PlusCircle className="h-6 w-6 mb-1" />
@@ -327,3 +299,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    

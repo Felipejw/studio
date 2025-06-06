@@ -14,7 +14,7 @@ import { getAiPsychologistResponse, type GetAiPsychologistResponseInput, type Ge
 import { Loader2, Sparkles, MessageSquare, Activity } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { db, collection, addDoc, query, where, orderBy, getDocs, Timestamp } from '@/lib/firebase'; // Added Timestamp
+import { db, collection, addDoc, query, where, orderBy, getDocs, Timestamp } from '@/lib/firebase'; 
 import { useAuth } from '@/components/auth-provider';
 
 const formSchema = z.object({
@@ -28,12 +28,12 @@ interface ChatEntryFirestore {
   userId: string;
   userInput: PsychologistFormValues;
   aiResponse: GetAiPsychologistResponseOutput;
-  timestamp: Timestamp; // Changed to Firestore Timestamp
+  timestamp: Timestamp; 
 }
 
 interface ChatEntry extends Omit<ChatEntryFirestore, 'timestamp'> {
   id: string; 
-  timestamp: Date; // Keep as Date for client-side display
+  timestamp: Date; 
 }
 
 
@@ -68,20 +68,20 @@ export default function AiPsychologistPage() {
       const querySnapshot = await getDocs(q);
       const fetchedHistory: ChatEntry[] = [];
       querySnapshot.forEach((doc) => {
-        const data = doc.data() as ChatEntryFirestore; // Assert type
+        const data = doc.data() as ChatEntryFirestore; 
         fetchedHistory.push({
           ...data,
           id: doc.id,
-          timestamp: data.timestamp.toDate() // Convert Firestore Timestamp to JS Date
+          timestamp: data.timestamp.toDate() 
         } as ChatEntry);
       });
       setChatHistory(fetchedHistory);
     } catch (error) {
-      console.error("Error fetching chat history:", error);
+      console.error("Detailed chat history error:", error);
       toast({
         variant: "destructive",
         title: "Erro ao Carregar Histórico",
-        description: "Não foi possível buscar o histórico de conversas.",
+        description: "Não foi possível buscar o histórico de conversas. Verifique o console.",
       });
     }
     setIsLoadingHistory(false);
@@ -110,7 +110,7 @@ export default function AiPsychologistPage() {
         userId: userId,
         userInput: data,
         aiResponse: response,
-        timestamp: Timestamp.fromDate(new Date()), // Use Firestore Timestamp
+        timestamp: Timestamp.fromDate(new Date()), 
       };
       await addDoc(collection(db, "mindset_logs"), newEntryToSave);
       
@@ -121,11 +121,11 @@ export default function AiPsychologistPage() {
       form.reset();
       fetchChatHistory(); 
     } catch (error: any) {
-      console.error("Detailed AI response error:", error, error.stack);
+      console.error("Detailed AI response error:", error);
       toast({
         variant: "destructive",
-        title: "Erro na Interação",
-        description: "Não foi possível obter resposta da IA ou salvar o log. Verifique o console para mais detalhes.",
+        title: "Erro na Interação com IA",
+        description: `Não foi possível obter resposta da IA ou salvar o log. ${error?.message || 'Verifique o console para mais detalhes.'}`,
       });
     }
     setIsLoading(false);
@@ -210,7 +210,7 @@ export default function AiPsychologistPage() {
                 ) : chatHistory.length === 0 ? (
                   <p className="text-muted-foreground">Nenhuma conversa anterior encontrada.</p>
                 ) : (
-                  <ScrollArea className="h-[400px] pr-4">
+                  <ScrollArea className="max-h-[60vh] md:max-h-[400px] pr-4">
                     <div className="space-y-6">
                       {chatHistory.map(entry => (
                         <div key={entry.id} className="p-4 border rounded-lg">
@@ -261,3 +261,5 @@ export default function AiPsychologistPage() {
     </div>
   );
 }
+
+    

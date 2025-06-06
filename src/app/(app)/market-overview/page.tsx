@@ -1,7 +1,8 @@
+
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { TrendingUp, BarChartBig, Users, CalendarDays, Bell } from 'lucide-react';
+import { TrendingUp, TrendingDown, BarChartBig, Users, CalendarDays, Bell } from 'lucide-react'; // Added TrendingDown
 import Image from 'next/image';
 
 interface MarketAssetProps {
@@ -23,11 +24,11 @@ const MarketAssetCard: React.FC<MarketAssetProps> = ({ name, trend, volume, icon
       {volume && <p className="text-xs text-muted-foreground">Volume: {volume}</p>}
       {name === "Ibovespa (Ações)" && (
          <Image 
-            src="https://placehold.co/300x150.png" // Placeholder for a small chart
+            src="https://placehold.co/300x150.png" 
             alt={`${name} chart`}
             width={300}
             height={150}
-            className="mt-2 rounded-md"
+            className="mt-2 rounded-md w-full h-auto max-w-[300px]"
             data-ai-hint={dataAiHint || "stock chart"}
           />
       )}
@@ -98,7 +99,7 @@ export default function MarketOverviewPage() {
                   alt="Volume chart"
                   width={600}
                   height={200}
-                  className="mt-2 rounded-md"
+                  className="mt-2 rounded-md w-full h-auto max-w-[600px]"
                   data-ai-hint="volume graph"
                 />
             </CardContent>
@@ -119,7 +120,7 @@ export default function MarketOverviewPage() {
                   alt="Player position chart"
                   width={600}
                   height={150}
-                  className="mt-2 rounded-md"
+                  className="mt-2 rounded-md w-full h-auto max-w-[600px]"
                   data-ai-hint="pie chart"
                 />
             </CardContent>
@@ -144,3 +145,5 @@ export default function MarketOverviewPage() {
     </div>
   );
 }
+
+    

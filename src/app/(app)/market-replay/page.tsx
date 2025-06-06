@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -84,7 +85,7 @@ export default function MarketReplayPage() {
 
   return (
     <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-8 font-headline">Simulador de Replay de Mercado</h1>
+      <h1 className="text-3xl font-bold mb-8 font-headline text-center sm:text-left">Simulador de Replay de Mercado</h1>
 
       {!simulationStarted ? (
         <Card className="max-w-md mx-auto">
@@ -133,21 +134,21 @@ export default function MarketReplayPage() {
                 alt="Gráfico de Candlestick (Placeholder)"
                 width={800}
                 height={400}
-                className="rounded-md shadow-lg mx-auto"
+                className="rounded-md shadow-lg mx-auto w-full max-w-[800px] h-auto"
                 data-ai-hint="stock chart"
               />
-              <div className="mt-6 flex justify-center space-x-2 md:space-x-4">
-                <Button variant="default" size="lg" className="bg-green-600 hover:bg-green-700 text-white">
+              <div className="mt-6 flex flex-wrap justify-center gap-2 md:gap-4">
+                <Button variant="default" size="lg" className="bg-green-600 hover:bg-green-700 text-white grow sm:grow-0">
                   <ShoppingCart className="mr-2 h-5 w-5" /> Comprar
                 </Button>
-                <Button variant="default" size="lg" className="bg-red-600 hover:bg-red-700 text-white">
+                <Button variant="default" size="lg" className="bg-red-600 hover:bg-red-700 text-white grow sm:grow-0">
                   <Tag className="mr-2 h-5 w-5" /> Vender
                 </Button>
-                <Button variant="outline" size="lg">
-                  <XCircle className="mr-2 h-5 w-5" /> Cancelar Ordem
+                <Button variant="outline" size="lg" className="grow sm:grow-0">
+                  <XCircle className="mr-2 h-5 w-5" /> Cancelar
                 </Button>
-                <Button variant="secondary" size="lg">
-                  <CheckCircle className="mr-2 h-5 w-5" /> Fechar Trade
+                <Button variant="secondary" size="lg" className="grow sm:grow-0">
+                  <CheckCircle className="mr-2 h-5 w-5" /> Fechar
                 </Button>
               </div>
               {!simulationFinished && (
@@ -240,3 +241,5 @@ export default function MarketReplayPage() {
     </div>
   );
 }
+
+    

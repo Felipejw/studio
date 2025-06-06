@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Button } from '@/components/ui/button';
@@ -5,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input';
 import { UploadCloud, Sparkles, TrendingUp, GitBranch, CheckSquare, Info } from 'lucide-react';
 import Image from 'next/image';
+import Link from 'next/link';
 
 export default function PrintAnalysisPage() {
   return (
@@ -80,12 +82,18 @@ export default function PrintAnalysisPage() {
         </div>
       </div>
        <div className="mt-12 text-center">
-         <Image src="https://placehold.co/600x300.png" alt="Exemplo de análise de print" width={600} height={300} className="rounded-lg shadow-lg mx-auto" data-ai-hint="chart analysis example"/>
+         <Image 
+            src="https://placehold.co/600x300.png" 
+            alt="Exemplo de análise de print" 
+            width={600} 
+            height={300} 
+            className="rounded-lg shadow-lg mx-auto w-full max-w-[600px] h-auto" 
+            data-ai-hint="chart analysis example"
+        />
          <p className="text-sm text-muted-foreground mt-2">Exemplo visual de como a IA pode apresentar a análise.</p>
        </div>
     </div>
   );
 }
 
-// Need to add a Link component if it's not auto-imported.
-import Link from 'next/link';
+    
