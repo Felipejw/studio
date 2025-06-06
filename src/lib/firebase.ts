@@ -11,7 +11,8 @@ import {
   doc, 
   setDoc, 
   getDoc, 
-  updateDoc, 
+  updateDoc,
+  deleteDoc, // Ensure deleteDoc is imported
   orderBy,
   Timestamp, // Import Timestamp
   type Firestore
@@ -110,6 +111,7 @@ export {
   setDoc,
   getDoc,
   updateDoc,
+  deleteDoc, // Ensure deleteDoc is exported
   orderBy,
   Timestamp, // Export Timestamp
   createUserWithEmailAndPassword,
