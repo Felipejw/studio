@@ -6,9 +6,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+// Avatar and Image imports are no longer needed if members list is removed
+// import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { MessageSquare, Users, LogIn, LogOut } from 'lucide-react';
-import Image from 'next/image'; // Import next/image
+// import Image from 'next/image'; // No longer needed if members list is removed
 
 // Placeholder data
 const placeholderMessages = [
@@ -20,20 +21,21 @@ const placeholderMessages = [
   { id: '6', user: 'Especialista FX', text: 'Atenção ao payroll americano, pode impactar forte o EUR/USD!', time: '09:15', type: 'forex' },
 ];
 
-const placeholderMembers = [
-  { id: '1', name: 'Alice Trader', initials: 'AT' },
-  { id: '2', name: 'Bob Scalper', initials: 'BS' },
-  { id: '3', name: 'Carlos Invest', initials: 'CI' },
-  { id: '4', name: 'Diana Daytrader', initials: 'DD' },
-];
+// placeholderMembers is no longer needed if the members list is removed
+// const placeholderMembers = [
+//   { id: '1', name: 'Alice Trader', initials: 'AT' },
+//   { id: '2', name: 'Bob Scalper', initials: 'BS' },
+//   { id: '3', name: 'Carlos Invest', initials: 'CI' },
+//   { id: '4', name: 'Diana Daytrader', initials: 'DD' },
+// ];
 
 function GroupContent({ groupName, assetType }: { groupName: string, assetType: 'índice' | 'dólar' | 'forex' }) {
   const relevantMessages = placeholderMessages.filter(msg => msg.type === assetType);
 
   return (
-    <div className="grid md:grid-cols-3 gap-6 md:h-[calc(100vh-300px)]"> {/* Adjusted height slightly */}
-      {/* Chat Area */}
-      <div className="md:col-span-2 flex flex-col h-full">
+    <div className="grid md:grid-cols-1 gap-6 md:h-[calc(100vh-300px)]"> {/* Changed md:grid-cols-3 to md:grid-cols-1 */}
+      {/* Chat Area - Now takes full width */}
+      <div className="md:col-span-1 flex flex-col h-full"> {/* Changed md:col-span-2 to md:col-span-1 */}
         <Card className="flex-grow flex flex-col shadow-md">
           <CardHeader className="pb-3">
             <CardTitle className="font-headline flex items-center text-lg">
@@ -67,7 +69,8 @@ function GroupContent({ groupName, assetType }: { groupName: string, assetType: 
         </Card>
       </div>
 
-      {/* Members & Actions Area */}
+      {/* Members & Actions Area - REMOVED */}
+      {/* 
       <div className="md:col-span-1 flex flex-col space-y-6 h-full">
         <Card className="shadow-md">
           <CardHeader className="pb-3">
@@ -76,7 +79,7 @@ function GroupContent({ groupName, assetType }: { groupName: string, assetType: 
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <ScrollArea className="h-[180px] pr-3"> {/* Adjusted height */}
+            <ScrollArea className="h-[180px] pr-3"> 
               <ul className="space-y-3">
                 {placeholderMembers.map(member => (
                   <li key={member.id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-muted/50 transition-colors">
@@ -105,7 +108,8 @@ function GroupContent({ groupName, assetType }: { groupName: string, assetType: 
             <p className="text-xs text-muted-foreground pt-2">Lembre-se de respeitar as regras da comunidade e manter discussões construtivas.</p>
           </CardContent>
         </Card>
-      </div>
+      </div> 
+      */}
     </div>
   );
 }
@@ -137,3 +141,4 @@ export default function TraderGroupsPage() {
     </div>
   );
 }
+
