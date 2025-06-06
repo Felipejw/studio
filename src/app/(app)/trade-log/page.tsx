@@ -30,7 +30,7 @@ const tradeSchema = z.object({
   asset: z.string().min(1, "Ativo é obrigatório."),
   type: z.enum(['compra', 'venda']),
   result: z.enum(['gain', 'loss', 'zero']),
-  amount: z.coerce.number(), // Validação de 'amount' será feita no superRefine
+  amount: z.coerce.number(), 
   period: z.enum(['manhã', 'tarde', 'noite']),
   setup: z.string().optional(),
   emotionBefore: z.number().min(0).max(10),
@@ -116,19 +116,28 @@ export default function TradeLogPage() {
       const fetchedTrades: TradeEntry[] = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data() as TradeEntryFirestore;
-        fetchedTrades.push({ 
-          ...data, 
-          id: doc.id,
-          date: data.date.toDate() 
-        } as TradeEntry);
+        // Basic check if data.date is a Firestore Timestamp
+        if (data.date && typeof data.date.toDate === 'function') {
+          fetchedTrades.push({ 
+            ...data, 
+            id: doc.id,
+            date: data.date.toDate() 
+          } as TradeEntry);
+        } else {
+          console.warn(`Document ${doc.id} has an invalid date field:`, data.date);
+        }
       });
       setTrades(fetchedTrades);
-    } catch (error) {
-      console.error("Erro ao carregar trades:", error);
+    } catch (error: any) {
+      console.error("Erro DETALHADO ao CARREGAR trades (objeto completo):", error);
+      if (error.stack) {
+        console.error("Stack do erro (carregar trades):", error.stack);
+      }
       toast({
         variant: "destructive",
         title: "Erro ao Carregar Trades",
-        description: "Não foi possível buscar seus trades registrados. Verifique o console.",
+        description: `Não foi possível buscar seus trades registrados. ${error?.message || String(error) ||  'Erro desconhecido'}. Verifique o console.`,
+        duration: 7000,
       });
     }
     setIsLoadingTrades(false);
@@ -147,7 +156,7 @@ export default function TradeLogPage() {
 
   const onSubmit: SubmitHandler<TradeFormValues> = async (data) => {
     if (!userId) {
-      toast({ variant: "destructive", title: "Erro de Autenticação", description: "Usuário não autenticado. Por favor, faça login novamente." });
+      toast({ variant: "destructive", title: "Erro de Autenticação", description: "Usuário não autenticado. Por favor, faça login novamente.", duration: 7000 });
       return;
     }
     try {
@@ -177,7 +186,7 @@ export default function TradeLogPage() {
         description: "Sua operação foi registrada com sucesso.",
       });
       form.reset({
-        date: new Date(), // Reset date to current date
+        date: new Date(),
         asset: '',
         type: 'compra',
         result: 'gain',
@@ -191,14 +200,14 @@ export default function TradeLogPage() {
       setIsDialogOpen(false);
       fetchTrades(); 
     } catch (error: any) {
-      console.error("Erro DETALHADO ao salvar trade no Firestore (objeto completo):", error);
+      console.error("Erro DETALHADO ao SALVAR trade (objeto completo):", error);
       if (error.stack) {
-        console.error("Stack do erro:", error.stack);
+        console.error("Stack do erro (salvar trade):", error.stack);
       }
       toast({
         variant: "destructive",
         title: "Erro ao Salvar Trade",
-        description: `Não foi possível registrar sua operação. Causa: ${error?.message || String(error) ||  'Erro desconhecido'}. Verifique o console para mais detalhes.`,
+        description: `Não foi possível registrar sua operação. ${error?.message || String(error) ||  'Erro desconhecido'}. Verifique o console para mais detalhes.`,
         duration: 7000,
       });
     }
@@ -264,7 +273,7 @@ export default function TradeLogPage() {
                             )}
                           >
                             {field.value ? (
-                              format(field.value, "PPP HH:mm", { locale: ptBR }) // Added time
+                              format(field.value, "PPP HH:mm", { locale: ptBR })
                             ) : (
                               <span>Escolha uma data</span>
                             )}
@@ -277,13 +286,12 @@ export default function TradeLogPage() {
                           mode="single"
                           selected={field.value}
                           onSelect={(date) => {
-                            // Preserve time if a date is selected, set to current time if new date
                             const newDate = date ? new Date(date) : new Date();
-                            if (field.value) { // if there was a previous date
+                            if (field.value) { 
                                 newDate.setHours(field.value.getHours());
                                 newDate.setMinutes(field.value.getMinutes());
                                 newDate.setSeconds(field.value.getSeconds());
-                            } else { // no previous date, set time to now for the selected day
+                            } else { 
                                 const now = new Date();
                                 newDate.setHours(now.getHours());
                                 newDate.setMinutes(now.getMinutes());
@@ -296,7 +304,6 @@ export default function TradeLogPage() {
                           initialFocus
                           locale={ptBR}
                         />
-                        {/* Simple Time Picker - could be replaced with a more robust one */}
                         <div className="p-2 border-t">
                             <FormLabel className="text-sm">Hora (HH:MM)</FormLabel>
                             <Input 
