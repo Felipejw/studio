@@ -6,6 +6,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { auth, onAuthStateChanged } from '@/lib/firebase';
 import { useRouter, usePathname } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
+import { navItems } from '@/config/nav'; // Import navItems
 
 interface AuthContextType {
   user: User | null;
@@ -34,29 +35,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading) return; // Don't run redirect logic until auth state is determined
 
     const isAuthPage = pathname === '/login' || pathname === '/signup';
-    // Updated to include all known app pages
-    const isAppPage = pathname.startsWith('/dashboard') || 
-                      pathname.startsWith('/daily-plan') || 
-                      pathname.startsWith('/trade-log') || 
-                      pathname.startsWith('/ai-psychologist') || 
-                      pathname.startsWith('/risk-manager') || 
-                      pathname.startsWith('/print-analysis') || 
-                      pathname.startsWith('/profile') ||
-                      pathname.startsWith('/market-overview') ||
-                      pathname.startsWith('/market-replay');
+    // Check if the current path is one of the protected app routes defined in navItems
+    const isAppRoute = navItems.some(item => pathname.startsWith(item.href));
 
-
-    if (!user && !isAuthPage && isAppPage) {
-      router.replace('/login');
-    } else if (user && isAuthPage) {
-      router.replace('/dashboard');
-    } else if (!user && pathname === '/') { // Root path redirect for non-authenticated user
-      router.replace('/login');
-    } else if (user && pathname === '/') { // Root path redirect for authenticated user
-       router.replace('/dashboard');
+    if (!user) { // User is NOT logged in
+      if (pathname === '/') { // User is on root path
+        router.replace('/login');
+      } else if (isAppRoute && !isAuthPage) { // User is trying to access a protected app page
+        router.replace('/login');
+      }
+      // If !user and on an auth page (e.g. /login, /signup), or any other non-app, non-root public page, do nothing.
+    } else { // User IS logged in
+      if (pathname === '/') { // User is on root path
+        router.replace('/dashboard');
+      } else if (isAuthPage) { // Logged in user trying to access login/signup page
+        router.replace('/dashboard');
+      }
+      // If user is logged in and on an app page (and not / or auth page), do nothing.
     }
   }, [user, loading, router, pathname]);
 
@@ -68,23 +66,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       </div>
     );
   }
-  
-  const isAuthPage = pathname === '/login' || pathname === '/signup';
-  // If user is not logged in and trying to access a protected route (implicit by this point if not auth page)
-  // and not on an auth page already, show loading or redirect.
-  // The redirect is handled by the useEffect above. Here, ensure children are not rendered prematurely for protected routes.
-  if (!user && !isAuthPage && pathname !== '/') {
-     // Effectively, this prevents rendering children of protected routes if not logged in
-     // The useEffect will handle the redirect.
-     return (
-        <div className="flex h-screen w-screen items-center justify-center bg-background">
-            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            <p className="ml-4 text-lg">Redirecionando...</p>
-        </div>
-     );
-  }
 
-
+  // At this point, loading is false. User state is determined.
+  // The useEffect above is handling redirects.
+  // We can now provide the context for children to consume.
   return (
     <AuthContext.Provider value={{ user, loading, userId: user?.uid || null }}>
       {children}
