@@ -15,6 +15,7 @@ import { useAuth } from '@/components/auth-provider';
 import { db, doc, setDoc, Timestamp, getDoc } from '@/lib/firebase';
 import { Loader2, CreditCard, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import Link from 'next/link'; // Ensure Link is imported
 
 type UserPlan = 'free' | 'pro' | 'vitalicio';
 
