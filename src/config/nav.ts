@@ -1,5 +1,6 @@
+
 import type { LucideIcon } from 'lucide-react';
-import { LayoutDashboard, FileText, BookOpenText, Brain, Gauge, ScanSearch, User } from 'lucide-react';
+import { LayoutDashboard, FileText, BookOpenText, Brain, Gauge, ScanSearch, User, TrendingUp, PlaySquare } from 'lucide-react';
 
 export interface NavItem {
   title: string;
@@ -27,6 +28,18 @@ export const navItems: NavItem[] = [
     href: '/trade-log',
     icon: BookOpenText,
     label: 'Diário de Operações',
+  },
+  {
+    title: 'Painel de Mercado',
+    href: '/market-overview',
+    icon: TrendingUp,
+    label: 'Visão Geral do Mercado',
+  },
+  {
+    title: 'Replay de Mercado',
+    href: '/market-replay',
+    icon: PlaySquare,
+    label: 'Simulador de Mercado',
   },
   {
     title: 'Psicólogo Virtual',

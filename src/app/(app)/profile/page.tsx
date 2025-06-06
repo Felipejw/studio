@@ -2,6 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation'; // Import useRouter
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { UserCircle, CreditCard, Settings, History, Download, Star, BarChartHorizontalBig, Edit, Loader2 } from 'lucide-react';
@@ -10,19 +11,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { db, doc, getDoc, setDoc } from '@/lib/firebase';
+import { db, doc, getDoc, setDoc, Timestamp } from '@/lib/firebase'; // Added Timestamp
 import { useAuth } from '@/components/auth-provider';
 
 type UserPlan = 'free' | 'pro' | 'vitalicio';
 
-interface UserProfileData {
+interface UserProfileDataFirestore {
   uid: string;
   name: string;
   email: string;
   plan: UserPlan;
-  memberSince: string; 
-  lastPayment?: string; 
+  memberSince: Timestamp; // Changed to Firestore Timestamp
+  lastPayment?: Timestamp; // Changed to Firestore Timestamp
 }
+
+interface UserProfileData extends Omit<UserProfileDataFirestore, 'memberSince' | 'lastPayment'> {
+  memberSince: string; // Keep as string for client-side display
+  lastPayment?: string; // Keep as string for client-side display
+}
+
 
 const consistencyLevels = [
     { name: "Iniciante", stars: 1, iconHint: "bronze medal" },
@@ -40,6 +47,7 @@ export default function ProfilePage() {
 
   const { toast } = useToast();
   const { user, userId } = useAuth();
+  const router = useRouter(); // Initialize useRouter
 
   const currentLevel = consistencyLevels[2]; 
 
@@ -54,32 +62,36 @@ export default function ProfilePage() {
       const userDocRef = doc(db, "users", userId);
       const docSnap = await getDoc(userDocRef);
       if (docSnap.exists()) {
-        const data = docSnap.data() as UserProfileData;
-        setUserProfile(data);
+        const data = docSnap.data() as UserProfileDataFirestore;
+        setUserProfile({
+            ...data,
+            memberSince: data.memberSince.toDate().toISOString(),
+            lastPayment: data.lastPayment?.toDate().toISOString(),
+        });
         setEditForm({ name: data.name, email: data.email });
       } else {
-        // This case should ideally be handled at signup
-        // or if user document creation failed.
-        // For robustness, create a default if missing and user is authenticated.
-        if (user) {
-            const defaultProfile: UserProfileData = {
+        if (user) { // Check if auth user object exists
+            const defaultProfileFirestore: UserProfileDataFirestore = {
               uid: user.uid,
               name: user.displayName || 'Novo Usuário',
               email: user.email || 'email@desconhecido.com',
               plan: 'free',
-              memberSince: new Date().toISOString(),
+              memberSince: Timestamp.fromDate(new Date()),
             };
-            await setDoc(userDocRef, defaultProfile);
-            setUserProfile(defaultProfile);
-            setEditForm({ name: defaultProfile.name, email: defaultProfile.email });
+            await setDoc(userDocRef, defaultProfileFirestore);
+            setUserProfile({
+                ...defaultProfileFirestore,
+                memberSince: defaultProfileFirestore.memberSince.toDate().toISOString(),
+            });
+            setEditForm({ name: defaultProfileFirestore.name, email: defaultProfileFirestore.email });
             toast({ title: "Perfil Criado", description: "Seu perfil inicial foi configurado." });
         } else {
-             setUserProfile(null); // No user, no profile
+             setUserProfile(null); 
         }
       }
-    } catch (error) {
-      console.error("Error fetching user profile:", error);
-      toast({ variant: "destructive", title: "Erro ao Carregar Perfil" });
+    } catch (error: any) {
+      console.error("Detailed profile fetch error:", error, error.stack);
+      toast({ variant: "destructive", title: "Erro ao Carregar Perfil", description: "Verifique o console para mais detalhes." });
       setUserProfile(null);
     }
     setIsLoading(false);
@@ -88,40 +100,76 @@ export default function ProfilePage() {
   useEffect(() => {
     fetchUserProfile();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, user]); // Depend on userId and user object
+  }, [userId]); // Depend only on userId
 
   const handlePlanChange = async (newPlan: UserPlan) => {
     if (!userProfile || !userId) return;
+    setIsLoading(true); // Indicate loading state
     try {
       const userDocRef = doc(db, "users", userId);
-      const updatedProfile = { ...userProfile, plan: newPlan };
-      await setDoc(userDocRef, updatedProfile, { merge: true });
-      setUserProfile(updatedProfile);
+      // Fetch current profile again to ensure we have the latest Firestore Timestamps
+      const currentDocSnap = await getDoc(userDocRef);
+      if (!currentDocSnap.exists()) {
+        toast({ variant: "destructive", title: "Erro", description: "Perfil não encontrado para atualizar plano." });
+        setIsLoading(false);
+        return;
+      }
+      const currentData = currentDocSnap.data() as UserProfileDataFirestore;
+      const updatedProfileFirestore: UserProfileDataFirestore = { 
+        ...currentData, 
+        plan: newPlan,
+        // Potentially update lastPayment if this action implies a payment
+        // lastPayment: newPlan !== 'free' ? Timestamp.fromDate(new Date()) : currentData.lastPayment,
+      };
+      await setDoc(userDocRef, updatedProfileFirestore, { merge: true });
+      setUserProfile({
+        ...updatedProfileFirestore,
+        memberSince: updatedProfileFirestore.memberSince.toDate().toISOString(),
+        lastPayment: updatedProfileFirestore.lastPayment?.toDate().toISOString(),
+      });
       toast({
         title: "Plano Atualizado!",
         description: `Seu plano agora é ${newPlan.toUpperCase()}.`,
       });
-    } catch (error) {
-      console.error("Error updating plan:", error);
-      toast({ variant: "destructive", title: "Erro ao Atualizar Plano" });
+    } catch (error: any) {
+      console.error("Error updating plan:", error, error.stack);
+      toast({ variant: "destructive", title: "Erro ao Atualizar Plano", description: "Verifique o console." });
     }
+    setIsLoading(false);
   };
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userProfile || !userId) return;
-    try {
+    setIsLoading(true);
+     try {
       const userDocRef = doc(db, "users", userId);
-      const updatedProfileData = { ...userProfile, name: editForm.name, email: editForm.email };
-      // Note: Email updates here don't update Firebase Auth email. That requires a separate process.
-      await setDoc(userDocRef, updatedProfileData, { merge: true });
-      setUserProfile(updatedProfileData);
+      const currentDocSnap = await getDoc(userDocRef);
+       if (!currentDocSnap.exists()) {
+        toast({ variant: "destructive", title: "Erro", description: "Perfil não encontrado para atualizar." });
+        setIsLoading(false);
+        return;
+      }
+      const currentData = currentDocSnap.data() as UserProfileDataFirestore;
+
+      const updatedProfileDataFirestore: UserProfileDataFirestore = { 
+        ...currentData, 
+        name: editForm.name, 
+        email: editForm.email // Note: Email updates here don't update Firebase Auth email.
+      };
+      await setDoc(userDocRef, updatedProfileDataFirestore, { merge: true });
+      setUserProfile({
+        ...updatedProfileDataFirestore,
+        memberSince: updatedProfileDataFirestore.memberSince.toDate().toISOString(),
+        lastPayment: updatedProfileDataFirestore.lastPayment?.toDate().toISOString(),
+      });
       setIsEditing(false);
       toast({ title: "Perfil Atualizado", description: "Suas informações foram salvas." });
-    } catch (error) {
-      console.error("Error updating profile:", error);
-      toast({ variant: "destructive", title: "Erro ao Atualizar Perfil" });
+    } catch (error: any) {
+      console.error("Error updating profile:", error, error.stack);
+      toast({ variant: "destructive", title: "Erro ao Atualizar Perfil", description: "Verifique o console." });
     }
+    setIsLoading(false);
   };
 
   const activityHistory = [
@@ -130,24 +178,25 @@ export default function ProfilePage() {
     { id: 3, date: '19/07/2024', action: 'Sessão com Psicólogo Virtual' },
   ];
   
-  if (isLoading) {
+  if (isLoading && !userProfile) { // Show loader only if profile is not yet loaded
     return (
-        <div className="container mx-auto py-8 flex justify-center items-center">
+        <div className="container mx-auto py-8 flex justify-center items-center h-[calc(100vh-200px)]">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="ml-2">Carregando perfil...</p>
         </div>
     );
   }
 
-  if (!userProfile || !user) { // Check both userProfile from Firestore and user from Auth
+  if (!userProfile && !isLoading) { // If done loading and still no profile
     return (
-        <div className="container mx-auto py-8">
-            <p>Não foi possível carregar o perfil. Por favor, tente fazer login novamente.</p>
+        <div className="container mx-auto py-8 text-center">
+            <p className="mb-4">Não foi possível carregar o perfil. Por favor, tente recarregar a página ou fazer login novamente.</p>
              <Button onClick={() => router.push('/login')} className="mt-4">Ir para Login</Button>
         </div>
     );
   }
-  // Make sure to import router if you use the button above: import { useRouter } from 'next/navigation'; const router = useRouter();
+  
+  if (!userProfile) return null; // Should not be reached if above conditions are met
 
   return (
     <div className="container mx-auto py-8">
@@ -164,7 +213,7 @@ export default function ProfilePage() {
                   <CardDescription>{userProfile.email}</CardDescription>
                 </div>
               </div>
-              <Button variant="outline" size="icon" onClick={() => setIsEditing(!isEditing)}>
+              <Button variant="outline" size="icon" onClick={() => setIsEditing(!isEditing)} disabled={isLoading}>
                 <Edit className="h-4 w-4"/>
                 <span className="sr-only">Editar Perfil</span>
               </Button>
@@ -182,8 +231,11 @@ export default function ProfilePage() {
                     <p className="text-xs text-muted-foreground mt-1">Para alterar o email de login, use as opções do Firebase Auth (não implementado aqui).</p>
                   </div>
                   <div className="flex gap-2">
-                    <Button type="submit">Salvar</Button>
-                    <Button type="button" variant="ghost" onClick={() => {setIsEditing(false); setEditForm({name: userProfile.name, email: userProfile.email});}}>Cancelar</Button>
+                    <Button type="submit" disabled={isLoading}>
+                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Salvar
+                    </Button>
+                    <Button type="button" variant="ghost" onClick={() => {setIsEditing(false); setEditForm({name: userProfile.name, email: userProfile.email});}} disabled={isLoading}>Cancelar</Button>
                   </div>
                 </form>
               ) : (
@@ -192,7 +244,7 @@ export default function ProfilePage() {
                     <p className="text-sm font-medium text-muted-foreground">Plano Atual</p>
                     <div className="flex items-center gap-2">
                        <p className="font-semibold text-lg text-primary">{userProfile.plan.toUpperCase()}</p>
-                        <Select value={userProfile.plan} onValueChange={(value: UserPlan) => handlePlanChange(value)}>
+                        <Select value={userProfile.plan} onValueChange={(value: UserPlan) => handlePlanChange(value)} disabled={isLoading}>
                             <SelectTrigger className="w-[180px] h-8 text-xs">
                                 <SelectValue placeholder="Mudar plano" />
                             </SelectTrigger>
@@ -202,6 +254,7 @@ export default function ProfilePage() {
                                 <SelectItem value="vitalicio">Vitalício (Simular)</SelectItem>
                             </SelectContent>
                         </Select>
+                         {isLoading && userProfile.plan !== editForm.name && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
                     </div>
                   </div>
                    {userProfile.lastPayment && (

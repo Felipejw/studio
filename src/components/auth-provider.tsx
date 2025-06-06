@@ -37,38 +37,47 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (loading) return;
 
     const isAuthPage = pathname === '/login' || pathname === '/signup';
-    const isAppPage = pathname.startsWith('/app') || pathname === '/dashboard' || pathname === '/daily-plan' || pathname === '/trade-log' || pathname === '/ai-psychologist' || pathname === '/risk-manager' || pathname === '/print-analysis' || pathname === '/profile';
+    // Updated to include all known app pages
+    const isAppPage = pathname.startsWith('/dashboard') || 
+                      pathname.startsWith('/daily-plan') || 
+                      pathname.startsWith('/trade-log') || 
+                      pathname.startsWith('/ai-psychologist') || 
+                      pathname.startsWith('/risk-manager') || 
+                      pathname.startsWith('/print-analysis') || 
+                      pathname.startsWith('/profile') ||
+                      pathname.startsWith('/market-overview') ||
+                      pathname.startsWith('/market-replay');
 
 
     if (!user && !isAuthPage && isAppPage) {
-      router.push('/login');
+      router.replace('/login');
     } else if (user && isAuthPage) {
-      router.push('/dashboard');
-    } else if (!user && pathname === '/') {
-      router.push('/login');
-    } else if (user && pathname === '/') {
-       router.push('/dashboard');
+      router.replace('/dashboard');
+    } else if (!user && pathname === '/') { // Root path redirect for non-authenticated user
+      router.replace('/login');
+    } else if (user && pathname === '/') { // Root path redirect for authenticated user
+       router.replace('/dashboard');
     }
   }, [user, loading, router, pathname]);
 
   if (loading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center">
+      <div className="flex h-screen w-screen items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
         <p className="ml-4 text-lg">Carregando...</p>
       </div>
     );
   }
   
+  const isAuthPage = pathname === '/login' || pathname === '/signup';
   // If user is not logged in and trying to access a protected route (implicit by this point if not auth page)
   // and not on an auth page already, show loading or redirect.
   // The redirect is handled by the useEffect above. Here, ensure children are not rendered prematurely for protected routes.
-  const isAuthPage = pathname === '/login' || pathname === '/signup';
   if (!user && !isAuthPage && pathname !== '/') {
      // Effectively, this prevents rendering children of protected routes if not logged in
      // The useEffect will handle the redirect.
      return (
-        <div className="flex h-screen w-screen items-center justify-center">
+        <div className="flex h-screen w-screen items-center justify-center bg-background">
             <Loader2 className="h-12 w-12 animate-spin text-primary" />
             <p className="ml-4 text-lg">Redirecionando...</p>
         </div>

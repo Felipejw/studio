@@ -14,7 +14,7 @@ import { getAiPsychologistResponse, type GetAiPsychologistResponseInput, type Ge
 import { Loader2, Sparkles, MessageSquare, Activity } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { db, collection, addDoc, query, where, orderBy, getDocs } from '@/lib/firebase';
+import { db, collection, addDoc, query, where, orderBy, getDocs, Timestamp } from '@/lib/firebase'; // Added Timestamp
 import { useAuth } from '@/components/auth-provider';
 
 const formSchema = z.object({
@@ -28,11 +28,12 @@ interface ChatEntryFirestore {
   userId: string;
   userInput: PsychologistFormValues;
   aiResponse: GetAiPsychologistResponseOutput;
-  timestamp: Date; 
+  timestamp: Timestamp; // Changed to Firestore Timestamp
 }
 
-interface ChatEntry extends ChatEntryFirestore {
+interface ChatEntry extends Omit<ChatEntryFirestore, 'timestamp'> {
   id: string; 
+  timestamp: Date; // Keep as Date for client-side display
 }
 
 
@@ -67,11 +68,11 @@ export default function AiPsychologistPage() {
       const querySnapshot = await getDocs(q);
       const fetchedHistory: ChatEntry[] = [];
       querySnapshot.forEach((doc) => {
-        const data = doc.data();
+        const data = doc.data() as ChatEntryFirestore; // Assert type
         fetchedHistory.push({
           ...data,
           id: doc.id,
-          timestamp: (data.timestamp as any).toDate ? (data.timestamp as any).toDate() : new Date(data.timestamp)
+          timestamp: data.timestamp.toDate() // Convert Firestore Timestamp to JS Date
         } as ChatEntry);
       });
       setChatHistory(fetchedHistory);
@@ -109,7 +110,7 @@ export default function AiPsychologistPage() {
         userId: userId,
         userInput: data,
         aiResponse: response,
-        timestamp: new Date(),
+        timestamp: Timestamp.fromDate(new Date()), // Use Firestore Timestamp
       };
       await addDoc(collection(db, "mindset_logs"), newEntryToSave);
       
@@ -119,12 +120,12 @@ export default function AiPsychologistPage() {
       });
       form.reset();
       fetchChatHistory(); 
-    } catch (error) {
-      console.error("Error getting AI response or saving log:", error);
+    } catch (error: any) {
+      console.error("Detailed AI response error:", error, error.stack);
       toast({
         variant: "destructive",
         title: "Erro na Interação",
-        description: "Não foi possível obter resposta da IA ou salvar o log.",
+        description: "Não foi possível obter resposta da IA ou salvar o log. Verifique o console para mais detalhes.",
       });
     }
     setIsLoading(false);
