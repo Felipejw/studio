@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { PlusCircle, FileText, PlayCircle, ScanLine, AlertTriangle, TrendingUp, Smile, BarChart } from 'lucide-react';
+import { PlusCircle, FileText, ScanLine, AlertTriangle, TrendingUp, Smile, BarChart } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 export default function DashboardPage() {
@@ -88,12 +88,6 @@ export default function DashboardPage() {
               <Link href="/daily-plan" className="flex flex-col items-center text-center">
                 <FileText className="h-8 w-8 mb-1" />
                 <span>Novo Plano Diário</span>
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="h-auto py-3">
-              <Link href="/market-replay" className="flex flex-col items-center text-center">
-                <PlayCircle className="h-8 w-8 mb-1" />
-                <span>Simulação</span>
               </Link>
             </Button>
             <Button asChild variant="outline" className="h-auto py-3">

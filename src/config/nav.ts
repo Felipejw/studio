@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { LayoutDashboard, FileText, BookOpenText, Brain, AreaChart, Play, Gauge, ScanSearch, User } from 'lucide-react';
+import { LayoutDashboard, FileText, BookOpenText, Brain, Gauge, ScanSearch, User } from 'lucide-react';
 
 export interface NavItem {
   title: string;
@@ -33,18 +33,6 @@ export const navItems: NavItem[] = [
     href: '/ai-psychologist',
     icon: Brain,
     label: 'Apoio Emocional',
-  },
-  {
-    title: 'Painel de Mercado',
-    href: '/market-overview',
-    icon: AreaChart,
-    label: 'Visão Geral do Mercado',
-  },
-  {
-    title: 'Simulador',
-    href: '/market-replay',
-    icon: Play,
-    label: 'Simulador de Replay',
   },
   {
     title: 'Gestor de Risco',
