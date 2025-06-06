@@ -14,44 +14,64 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
-import { PlusCircle, Filter, ListChecks, TrendingUp, Meh, Repeat, CalendarIcon, Loader2 } from 'lucide-react';
+import { PlusCircle, Filter, ListChecks, TrendingUp, Meh, Repeat, CalendarIcon, Loader2, Sun, Moon, CloudSun } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { db, collection, addDoc, getDocs, query, where, orderBy } from '@/lib/firebase';
+import { db, collection, addDoc, getDocs, query, where, orderBy, Timestamp } from '@/lib/firebase';
 import { useAuth } from '@/components/auth-provider';
-
-
-interface TradeEntryFirestore extends TradeFormValues {
-  id?: string; 
-  userId: string;
-  date: Date; 
-  profit: number;
-}
-
-interface TradeEntry extends TradeEntryFirestore {
-  id: string; 
-}
-
 
 const tradeSchema = z.object({
   asset: z.string().min(1, "Ativo é obrigatório."),
   type: z.enum(['compra', 'venda']),
-  entryPrice: z.coerce.number().positive("Preço de entrada deve ser positivo."),
-  exitPrice: z.coerce.number().positive("Preço de saída deve ser positivo."),
   result: z.enum(['gain', 'loss', 'zero']),
-  stopPrice: z.coerce.number().optional(),
-  targetPrice: z.coerce.number().optional(),
+  amount: z.coerce.number().min(0, { message: "O valor deve ser zero ou positivo." }),
+  period: z.enum(['manhã', 'tarde', 'noite']),
   setup: z.string().optional(),
   emotionBefore: z.number().min(0).max(10),
   emotionAfter: z.number().min(0).max(10),
   comment: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.result === 'zero' && data.amount !== 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Para 'Zero a Zero', o valor deve ser 0.",
+      path: ['amount'],
+    });
+  }
+  if ((data.result === 'gain' || data.result === 'loss') && data.amount <= 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Para 'Gain' ou 'Loss', o valor deve ser maior que zero.",
+      path: ['amount'],
+    });
+  }
 });
 
 type TradeFormValues = z.infer<typeof tradeSchema>;
+
+interface TradeEntryFirestore {
+  userId: string;
+  date: Timestamp; // Salvar como Firestore Timestamp
+  asset: string;
+  type: 'compra' | 'venda';
+  result: 'gain' | 'loss' | 'zero';
+  profit: number; // Valor monetário final com sinal
+  period: 'manhã' | 'tarde' | 'noite';
+  setup?: string;
+  emotionBefore: number;
+  emotionAfter: number;
+  comment?: string;
+}
+
+interface TradeEntry extends Omit<TradeEntryFirestore, 'date'> {
+  id: string;
+  date: Date; // Converter para Date para uso no cliente
+}
+
 
 export default function TradeLogPage() {
   const [trades, setTrades] = useState<TradeEntry[]>([]);
@@ -66,22 +86,18 @@ export default function TradeLogPage() {
     defaultValues: {
       asset: '',
       type: 'compra',
-      entryPrice: undefined,
-      exitPrice: undefined,
-      result: 'zero',
+      result: 'gain',
+      amount: 0,
+      period: 'manhã',
       emotionBefore: 5,
       emotionAfter: 5,
     },
   });
   
-  const calculateProfit = (entry: number, exit: number, type: 'compra' | 'venda'): number => {
-    if (type === 'compra') return exit - entry;
-    return entry - exit;
-  };
-
   const fetchTrades = async () => {
     if (!userId) {
       setIsLoadingTrades(false);
+      setTrades([]);
       return;
     }
     setIsLoadingTrades(true);
@@ -94,11 +110,11 @@ export default function TradeLogPage() {
       const querySnapshot = await getDocs(q);
       const fetchedTrades: TradeEntry[] = [];
       querySnapshot.forEach((doc) => {
-        const data = doc.data();
+        const data = doc.data() as TradeEntryFirestore;
         fetchedTrades.push({ 
           ...data, 
           id: doc.id,
-          date: (data.date as any).toDate ? (data.date as any).toDate() : new Date(data.date)
+          date: data.date.toDate() // Converter Timestamp para Date
         } as TradeEntry);
       });
       setTrades(fetchedTrades);
@@ -117,8 +133,8 @@ export default function TradeLogPage() {
     if (userId) {
       fetchTrades();
     } else {
-      setIsLoadingTrades(false); // Stop loading if no user
-      setTrades([]); // Clear trades if user logs out
+      setIsLoadingTrades(false); 
+      setTrades([]); 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
@@ -130,11 +146,26 @@ export default function TradeLogPage() {
       return;
     }
     try {
+      let calculatedProfit = 0;
+      if (data.result === 'gain') {
+        calculatedProfit = Math.abs(data.amount);
+      } else if (data.result === 'loss') {
+        calculatedProfit = -Math.abs(data.amount);
+      }
+      // Se for 'zero', calculatedProfit permanece 0 (já validado pelo schema que amount é 0)
+
       const tradeToSave: TradeEntryFirestore = {
-        ...data,
         userId: userId,
-        date: new Date(),
-        profit: calculateProfit(data.entryPrice, data.exitPrice, data.type),
+        date: Timestamp.fromDate(new Date()), // Salvar como Firestore Timestamp
+        asset: data.asset,
+        type: data.type,
+        result: data.result,
+        profit: calculatedProfit,
+        period: data.period,
+        setup: data.setup,
+        emotionBefore: data.emotionBefore,
+        emotionAfter: data.emotionAfter,
+        comment: data.comment,
       };
       await addDoc(collection(db, "trades"), tradeToSave);
       toast({
@@ -169,7 +200,10 @@ export default function TradeLogPage() {
     <div className="container mx-auto py-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold font-headline">Diário de Operações</h1>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={(isOpen) => {
+          setIsDialogOpen(isOpen);
+          if (!isOpen) form.reset(); // Resetar form ao fechar
+        }}>
           <DialogTrigger asChild>
             <Button disabled={!userId}>
               <PlusCircle className="mr-2 h-4 w-4" /> Novo Trade
@@ -205,54 +239,59 @@ export default function TradeLogPage() {
                   )}
                 />
               </div>
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField control={form.control} name="entryPrice" render={({ field }) => (
+                <FormField control={form.control} name="result" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Preço de Entrada</FormLabel>
-                      <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
+                      <FormLabel>Resultado</FormLabel>
+                      <FormControl>
+                        <RadioGroup 
+                          onValueChange={(value) => {
+                            field.onChange(value);
+                            if (value === 'zero') {
+                              form.setValue('amount', 0, { shouldValidate: true });
+                            } else if (form.getValues('amount') === 0 && (value === 'gain' || value === 'loss')) {
+                               form.setValue('amount', undefined as any, { shouldValidate: true }); // Limpa para forçar validação
+                            }
+                          }} 
+                          defaultValue={field.value} 
+                          className="flex space-x-4 items-center pt-2"
+                        >
+                          <FormItem className="flex items-center space-x-2"><RadioGroupItem value="gain" /><FormLabel className="font-normal">Gain</FormLabel></FormItem>
+                          <FormItem className="flex items-center space-x-2"><RadioGroupItem value="loss" /><FormLabel className="font-normal">Loss</FormLabel></FormItem>
+                          <FormItem className="flex items-center space-x-2"><RadioGroupItem value="zero" /><FormLabel className="font-normal">Zero a Zero</FormLabel></FormItem>
+                        </RadioGroup>
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                <FormField control={form.control} name="exitPrice" render={({ field }) => (
+                 <FormField control={form.control} name="amount" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Preço de Saída</FormLabel>
-                      <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
+                      <FormLabel>Valor do Resultado (R$)</FormLabel>
+                      <FormControl><Input type="number" step="0.01" {...field} disabled={form.watch('result') === 'zero'} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
-              <FormField control={form.control} name="result" render={({ field }) => (
+              
+              <FormField control={form.control} name="period" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Resultado</FormLabel>
-                    <FormControl>
-                      <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4">
-                        <FormItem className="flex items-center space-x-2"><RadioGroupItem value="gain" /><FormLabel className="font-normal">Gain</FormLabel></FormItem>
-                        <FormItem className="flex items-center space-x-2"><RadioGroupItem value="loss" /><FormLabel className="font-normal">Loss</FormLabel></FormItem>
-                        <FormItem className="flex items-center space-x-2"><RadioGroupItem value="zero" /><FormLabel className="font-normal">Zero a Zero</FormLabel></FormItem>
-                      </RadioGroup>
-                    </FormControl>
+                    <FormLabel>Período da Operação</FormLabel>
+                     <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          <SelectItem value="manhã"><Sun className="inline mr-2 h-4 w-4"/>Manhã</SelectItem>
+                          <SelectItem value="tarde"><CloudSun className="inline mr-2 h-4 w-4"/>Tarde</SelectItem>
+                          <SelectItem value="noite"><Moon className="inline mr-2 h-4 w-4"/>Noite</SelectItem>
+                        </SelectContent>
+                      </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 <FormField control={form.control} name="stopPrice" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Stop Loss (Opcional)</FormLabel>
-                      <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField control={form.control} name="targetPrice" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Alvo (Opcional)</FormLabel>
-                      <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
-                    </FormItem>
-                  )}
-                />
-              </div>
+              
               <FormField control={form.control} name="setup" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Setup Usado (Opcional)</FormLabel>
@@ -335,6 +374,7 @@ export default function TradeLogPage() {
                   <TableHead>Data</TableHead>
                   <TableHead>Ativo</TableHead>
                   <TableHead>Tipo</TableHead>
+                  <TableHead>Período</TableHead>
                   <TableHead>Resultado (R$)</TableHead>
                   <TableHead>Emoção (Antes/Depois)</TableHead>
                   <TableHead>Setup</TableHead>
@@ -346,6 +386,7 @@ export default function TradeLogPage() {
                     <TableCell>{format(trade.date, "dd/MM/yyyy HH:mm")}</TableCell>
                     <TableCell>{trade.asset}</TableCell>
                     <TableCell>{trade.type === 'compra' ? 'Compra' : 'Venda'}</TableCell>
+                    <TableCell className="capitalize">{trade.period}</TableCell>
                     <TableCell className={trade.profit > 0 ? 'text-green-600' : trade.profit < 0 ? 'text-red-600' : ''}>
                       {trade.profit.toFixed(2)}
                     </TableCell>
@@ -354,7 +395,7 @@ export default function TradeLogPage() {
                   </TableRow>
                 )) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center">Nenhum trade encontrado para {filterDate ? `o dia ${format(filterDate, "dd/MM/yyyy")}` : 'o período'}.</TableCell>
+                    <TableCell colSpan={7} className="text-center">Nenhum trade encontrado para {filterDate ? `o dia ${format(filterDate, "dd/MM/yyyy")}` : 'o período selecionado'}.</TableCell>
                   </TableRow>
                 )}
               </TableBody>
@@ -370,22 +411,23 @@ export default function TradeLogPage() {
         <Card>
           <CardHeader><CardTitle className="font-headline flex items-center"><TrendingUp className="mr-2 h-5 w-5"/>Lucro x Perda</CardTitle></CardHeader>
           <CardContent className="h-64 flex items-center justify-center bg-muted/50 rounded-md">
-            <p className="text-muted-foreground">Gráfico de Lucro x Perda (Placeholder)</p>
+            <p className="text-muted-foreground">Gráfico de Lucro x Perda (Em breve)</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader><CardTitle className="font-headline flex items-center"><Meh className="mr-2 h-5 w-5"/>Emoção Média</CardTitle></CardHeader>
           <CardContent className="h-64 flex items-center justify-center bg-muted/50 rounded-md">
-             <p className="text-muted-foreground">Gráfico de Emoção Média (Placeholder)</p>
+             <p className="text-muted-foreground">Gráfico de Emoção Média (Em breve)</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader><CardTitle className="font-headline flex items-center"><Repeat className="mr-2 h-5 w-5"/>R/R Médio</CardTitle></CardHeader>
           <CardContent className="h-64 flex items-center justify-center bg-muted/50 rounded-md">
-            <p className="text-muted-foreground">Gráfico de R/R Médio (Placeholder)</p>
+            <p className="text-muted-foreground">Gráfico de R/R Médio (Em breve)</p>
           </CardContent>
         </Card>
       </div>
     </div>
   );
 }
+
