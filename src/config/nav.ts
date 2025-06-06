@@ -1,6 +1,6 @@
 
 import type { LucideIcon } from 'lucide-react';
-import { LayoutDashboard, FileText, BookOpenText, Brain, Gauge, ScanSearch, User, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, FileText, BookOpenText, Brain, Gauge, User, TrendingUp } from 'lucide-react';
 
 export interface NavItem {
   title: string;
@@ -48,15 +48,10 @@ export const navItems: NavItem[] = [
     label: 'Controle de Risco',
   },
   {
-    title: 'Análise de Print',
-    href: '/print-analysis',
-    icon: ScanSearch,
-    label: 'Análise com IA (Premium)',
-  },
-  {
     title: 'Perfil',
     href: '/profile',
     icon: User,
     label: 'Seu Perfil e Plano',
   },
 ];
+
