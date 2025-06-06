@@ -30,7 +30,7 @@ const tradeSchema = z.object({
   asset: z.string().min(1, "Ativo é obrigatório."),
   type: z.enum(['compra', 'venda']),
   result: z.enum(['gain', 'loss', 'zero']),
-  amount: z.coerce.number().min(0, { message: "O valor deve ser zero ou positivo." }),
+  amount: z.coerce.number(), // Validação de 'amount' será feita no superRefine
   period: z.enum(['manhã', 'tarde', 'noite']),
   setup: z.string().optional(),
   emotionBefore: z.number().min(0).max(10),
@@ -176,15 +176,29 @@ export default function TradeLogPage() {
         title: "Trade Salvo!",
         description: "Sua operação foi registrada com sucesso.",
       });
-      form.reset();
+      form.reset({
+        date: new Date(), // Reset date to current date
+        asset: '',
+        type: 'compra',
+        result: 'gain',
+        amount: 0,
+        period: 'manhã',
+        emotionBefore: 5,
+        emotionAfter: 5,
+        setup: '',
+        comment: ''
+      });
       setIsDialogOpen(false);
       fetchTrades(); 
     } catch (error: any) {
-      console.error("Erro detalhado ao salvar trade no Firestore:", error, error.stack);
+      console.error("Erro DETALHADO ao salvar trade no Firestore (objeto completo):", error);
+      if (error.stack) {
+        console.error("Stack do erro:", error.stack);
+      }
       toast({
         variant: "destructive",
         title: "Erro ao Salvar Trade",
-        description: `Não foi possível registrar sua operação. Causa: ${error.message || 'Erro desconhecido'}. Verifique o console para mais detalhes.`,
+        description: `Não foi possível registrar sua operação. Causa: ${error?.message || String(error) ||  'Erro desconhecido'}. Verifique o console para mais detalhes.`,
         duration: 7000,
       });
     }
@@ -207,7 +221,20 @@ export default function TradeLogPage() {
         <h1 className="text-3xl font-bold font-headline">Diário de Operações</h1>
         <Dialog open={isDialogOpen} onOpenChange={(isOpen) => {
           setIsDialogOpen(isOpen);
-          if (!isOpen) form.reset(); 
+          if (!isOpen) {
+            form.reset({
+              date: new Date(),
+              asset: '',
+              type: 'compra',
+              result: 'gain',
+              amount: 0,
+              period: 'manhã',
+              emotionBefore: 5,
+              emotionAfter: 5,
+              setup: '',
+              comment: ''
+            });
+          }
         }}>
           <DialogTrigger asChild>
             <Button disabled={!userId}>
@@ -237,7 +264,7 @@ export default function TradeLogPage() {
                             )}
                           >
                             {field.value ? (
-                              format(field.value, "PPP", { locale: ptBR })
+                              format(field.value, "PPP HH:mm", { locale: ptBR }) // Added time
                             ) : (
                               <span>Escolha uma data</span>
                             )}
@@ -249,13 +276,43 @@ export default function TradeLogPage() {
                         <Calendar
                           mode="single"
                           selected={field.value}
-                          onSelect={field.onChange}
+                          onSelect={(date) => {
+                            // Preserve time if a date is selected, set to current time if new date
+                            const newDate = date ? new Date(date) : new Date();
+                            if (field.value) { // if there was a previous date
+                                newDate.setHours(field.value.getHours());
+                                newDate.setMinutes(field.value.getMinutes());
+                                newDate.setSeconds(field.value.getSeconds());
+                            } else { // no previous date, set time to now for the selected day
+                                const now = new Date();
+                                newDate.setHours(now.getHours());
+                                newDate.setMinutes(now.getMinutes());
+                            }
+                            field.onChange(newDate);
+                          }}
                           disabled={(date) =>
                             date > new Date() || date < new Date("2000-01-01")
                           }
                           initialFocus
                           locale={ptBR}
                         />
+                        {/* Simple Time Picker - could be replaced with a more robust one */}
+                        <div className="p-2 border-t">
+                            <FormLabel className="text-sm">Hora (HH:MM)</FormLabel>
+                            <Input 
+                                type="time" 
+                                defaultValue={field.value ? format(field.value, "HH:mm") : format(new Date(), "HH:mm")}
+                                onChange={(e) => {
+                                    const currentTime = field.value || new Date();
+                                    const [hours, minutes] = e.target.value.split(':');
+                                    const updatedDate = new Date(currentTime);
+                                    updatedDate.setHours(parseInt(hours, 10));
+                                    updatedDate.setMinutes(parseInt(minutes, 10));
+                                    field.onChange(updatedDate);
+                                }}
+                                className="w-full mt-1"
+                            />
+                        </div>
                       </PopoverContent>
                     </Popover>
                     <FormMessage />
@@ -483,3 +540,5 @@ export default function TradeLogPage() {
     </div>
   );
 }
+
+    
