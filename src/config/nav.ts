@@ -1,6 +1,6 @@
 
 import type { LucideIcon } from 'lucide-react';
-import { LayoutDashboard, FileText, BookOpenText, Brain, Gauge, User, TrendingUp, DollarSign, Repeat } from 'lucide-react';
+import { LayoutDashboard, FileText, BookOpenText, Brain, Gauge, User, DollarSign } from 'lucide-react';
 
 export interface NavItem {
   title: string;
@@ -30,18 +30,6 @@ export const navItems: NavItem[] = [
     label: 'Diário de Operações',
   },
   {
-    title: 'Painel de Mercado',
-    href: '/market-overview',
-    icon: TrendingUp,
-    label: 'Visão Geral do Mercado',
-  },
-   {
-    title: 'Market Replay',
-    href: '/market-replay',
-    icon: Repeat, // Using Repeat icon
-    label: 'Simulação de Mercado',
-  },
-  {
     title: 'Psicólogo Virtual',
     href: '/ai-psychologist',
     icon: Brain,
@@ -66,3 +54,4 @@ export const navItems: NavItem[] = [
     label: 'Seu Perfil e Plano',
   },
 ];
+
