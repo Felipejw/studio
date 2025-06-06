@@ -1,45 +1,40 @@
+
 'use client';
 
-import { useState, useMemo } from 'react';
-import { useForm, Controller, SubmitHandler } from 'react-hook-form';
+import { useState, useMemo, useEffect } from 'react';
+import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
-import { PlusCircle, Filter, BarChart2, TrendingUp, TrendingDown, Minus, ListChecks, Briefcase, Repeat, Meh } from 'lucide-react';
+import { PlusCircle, Filter, ListChecks, TrendingUp, Meh, Repeat, CalendarIcon } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { db, MOCK_USER_ID, collection, addDoc, getDocs, query, where, orderBy } from '@/lib/firebase';
 
-// TODO: Define this type more robustly, perhaps in src/types
-interface TradeEntry {
-  id: string;
-  date: Date;
-  asset: string;
-  type: 'compra' | 'venda';
-  entryPrice: number;
-  exitPrice: number;
-  result: 'gain' | 'loss' | 'zero';
-  stopPrice?: number;
-  targetPrice?: number;
-  setup?: string;
-  rrEstimate?: string; // e.g., "1:2"
-  emotionBefore: number;
-  emotionAfter: number;
-  comment?: string;
+
+interface TradeEntryFirestore extends TradeFormValues {
+  id?: string; // Firestore ID, optional for new entries
+  userId: string;
+  date: Date; // This will be a Firebase Timestamp in Firestore
   profit: number;
 }
+
+interface TradeEntry extends TradeEntryFirestore {
+  id: string; // Firestore ID is mandatory here
+}
+
 
 const tradeSchema = z.object({
   asset: z.string().min(1, "Ativo é obrigatório."),
@@ -61,6 +56,8 @@ export default function TradeLogPage() {
   const [trades, setTrades] = useState<TradeEntry[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [filterDate, setFilterDate] = useState<Date | undefined>();
+  const [isLoadingTrades, setIsLoadingTrades] = useState(true);
+  const { toast } = useToast();
 
   const form = useForm<TradeFormValues>({
     resolver: zodResolver(tradeSchema),
@@ -76,21 +73,74 @@ export default function TradeLogPage() {
   });
   
   const calculateProfit = (entry: number, exit: number, type: 'compra' | 'venda'): number => {
+    // Assuming 1 contract for simplicity. For WIN points, 1 point = R$0.20. For WDO, 1 point = R$10.
+    // This needs to be adaptable per asset. For this example, let's assume direct price difference for P/L.
+    // If asset is WIN, (exit - entry) * 0.20. If WDO, (exit - entry) * 10.
+    // For now, a simple difference.
     if (type === 'compra') return exit - entry;
     return entry - exit;
   };
 
-  const onSubmit: SubmitHandler<TradeFormValues> = (data) => {
-    const newTrade: TradeEntry = {
-      id: new Date().toISOString(), // Simple ID
-      date: new Date(),
-      ...data,
-      profit: calculateProfit(data.entryPrice, data.exitPrice, data.type),
-      // rrEstimate can be calculated or manually input if another field is added
-    };
-    setTrades(prevTrades => [newTrade, ...prevTrades]);
-    form.reset();
-    setIsDialogOpen(false);
+  const fetchTrades = async () => {
+    setIsLoadingTrades(true);
+    try {
+      const q = query(
+        collection(db, "trades"), 
+        where("userId", "==", MOCK_USER_ID), // Replace with actual user ID
+        orderBy("date", "desc")
+      );
+      const querySnapshot = await getDocs(q);
+      const fetchedTrades: TradeEntry[] = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        fetchedTrades.push({ 
+          ...data, 
+          id: doc.id,
+          date: (data.date as any).toDate ? (data.date as any).toDate() : new Date(data.date) // Handle Firebase Timestamp
+        } as TradeEntry);
+      });
+      setTrades(fetchedTrades);
+    } catch (error) {
+      console.error("Error fetching trades:", error);
+      toast({
+        variant: "destructive",
+        title: "Erro ao Carregar Trades",
+        description: "Não foi possível buscar seus trades registrados.",
+      });
+    }
+    setIsLoadingTrades(false);
+  };
+
+  useEffect(() => {
+    fetchTrades();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+
+  const onSubmit: SubmitHandler<TradeFormValues> = async (data) => {
+    try {
+      const tradeToSave: TradeEntryFirestore = {
+        ...data,
+        userId: MOCK_USER_ID, // Replace with actual user ID
+        date: new Date(),
+        profit: calculateProfit(data.entryPrice, data.exitPrice, data.type),
+      };
+      await addDoc(collection(db, "trades"), tradeToSave);
+      toast({
+        title: "Trade Salvo!",
+        description: "Sua operação foi registrada com sucesso.",
+      });
+      form.reset();
+      setIsDialogOpen(false);
+      fetchTrades(); // Refresh the list
+    } catch (error) {
+      console.error("Error saving trade:", error);
+      toast({
+        variant: "destructive",
+        title: "Erro ao Salvar Trade",
+        description: "Não foi possível registrar sua operação.",
+      });
+    }
   };
 
   const filteredTrades = useMemo(() => {
@@ -260,39 +310,43 @@ export default function TradeLogPage() {
           <CardTitle className="font-headline flex items-center"><ListChecks className="mr-2 h-5 w-5" />Trades Registrados</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Data</TableHead>
-                <TableHead>Ativo</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Resultado (R$)</TableHead>
-                <TableHead>Emoção (Antes/Depois)</TableHead>
-                <TableHead>Setup</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredTrades.length > 0 ? filteredTrades.map(trade => (
-                <TableRow key={trade.id}>
-                  <TableCell>{format(trade.date, "dd/MM/yyyy HH:mm")}</TableCell>
-                  <TableCell>{trade.asset}</TableCell>
-                  <TableCell>{trade.type === 'compra' ? 'Compra' : 'Venda'}</TableCell>
-                  <TableCell className={trade.profit > 0 ? 'text-green-600' : trade.profit < 0 ? 'text-red-600' : ''}>
-                    {trade.profit.toFixed(2)}
-                  </TableCell>
-                  <TableCell>{trade.emotionBefore} / {trade.emotionAfter}</TableCell>
-                  <TableCell>{trade.setup || 'N/A'}</TableCell>
-                </TableRow>
-              )) : (
+          {isLoadingTrades ? (
+            <p>Carregando trades...</p>
+          ) : (
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center">Nenhum trade encontrado.</TableCell>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Ativo</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Resultado (R$)</TableHead>
+                  <TableHead>Emoção (Antes/Depois)</TableHead>
+                  <TableHead>Setup</TableHead>
                 </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredTrades.length > 0 ? filteredTrades.map(trade => (
+                  <TableRow key={trade.id}>
+                    <TableCell>{format(trade.date, "dd/MM/yyyy HH:mm")}</TableCell>
+                    <TableCell>{trade.asset}</TableCell>
+                    <TableCell>{trade.type === 'compra' ? 'Compra' : 'Venda'}</TableCell>
+                    <TableCell className={trade.profit > 0 ? 'text-green-600' : trade.profit < 0 ? 'text-red-600' : ''}>
+                      {trade.profit.toFixed(2)}
+                    </TableCell>
+                    <TableCell>{trade.emotionBefore} / {trade.emotionAfter}</TableCell>
+                    <TableCell>{trade.setup || 'N/A'}</TableCell>
+                  </TableRow>
+                )) : (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center">Nenhum trade encontrado para {filterDate ? `o dia ${format(filterDate, "dd/MM/yyyy")}` : 'o período'}.</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+              {filteredTrades.length > 0 && (
+                  <TableCaption>Total P/L do período: <span className={totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}>R$ {totalProfit.toFixed(2)}</span></TableCaption>
               )}
-            </TableBody>
-             {filteredTrades.length > 0 && (
-                <TableCaption>Total P/L do período: <span className={totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}>R$ {totalProfit.toFixed(2)}</span></TableCaption>
-             )}
-          </Table>
+            </Table>
+          )}
         </CardContent>
       </Card>
 

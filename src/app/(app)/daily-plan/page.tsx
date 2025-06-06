@@ -1,21 +1,22 @@
+
 'use client';
 
-import { useState } from 'react';
-import { useForm, Controller, SubmitHandler } from 'react-hook-form';
+import { useState, useEffect } from 'react';
+import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { generateDailyPlan, type GenerateDailyPlanInput, type GenerateDailyPlanOutput } from '@/ai/flows/generate-daily-plan';
 import { Loader2, Wand2 } from 'lucide-react';
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useToast } from "@/hooks/use-toast";
+import { db, MOCK_USER_ID, collection, addDoc } from '@/lib/firebase';
 
 const setupsOptions = [
   { id: 'scalping', label: 'Scalping' },
@@ -39,6 +40,7 @@ type DailyPlanFormValues = z.infer<typeof formSchema>;
 export default function DailyPlanPage() {
   const [aiResponse, setAiResponse] = useState<GenerateDailyPlanOutput | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
 
   const form = useForm<DailyPlanFormValues>({
     resolver: zodResolver(formSchema),
@@ -56,11 +58,29 @@ export default function DailyPlanPage() {
     setIsLoading(true);
     setAiResponse(null);
     try {
-      const response = await generateDailyPlan(data as GenerateDailyPlanInput); // Cast needed due to zod coercion of number
+      const response = await generateDailyPlan(data as GenerateDailyPlanInput);
       setAiResponse(response);
+
+      // Save to Firestore
+      await addDoc(collection(db, "trading_plans"), {
+        ...data,
+        aiGeneratedPlan: response,
+        userId: MOCK_USER_ID, // Replace with actual user ID after auth
+        createdAt: new Date(),
+      });
+
+      toast({
+        title: "Plano Gerado e Salvo!",
+        description: "Seu plano diário foi criado pela IA e salvo no Firestore.",
+      });
+
     } catch (error) {
-      console.error("Error generating plan:", error);
-      // Handle error display to user, e.g., using a toast
+      console.error("Error generating or saving plan:", error);
+      toast({
+        variant: "destructive",
+        title: "Erro ao Gerar Plano",
+        description: "Não foi possível gerar ou salvar o plano. Tente novamente.",
+      });
     }
     setIsLoading(false);
   };
@@ -243,7 +263,7 @@ export default function DailyPlanPage() {
             <CardTitle className="font-headline">Seu Plano Diário Personalizado</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {isLoading && (
+            {isLoading && !aiResponse && (
               <div className="flex flex-col items-center justify-center h-64">
                 <Loader2 className="h-12 w-12 animate-spin text-primary" />
                 <p className="mt-4 text-muted-foreground">Gerando seu plano...</p>

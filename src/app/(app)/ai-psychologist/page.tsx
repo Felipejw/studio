@@ -1,7 +1,8 @@
+
 'use client';
 
-import { useState } from 'react';
-import { useForm, Controller, SubmitHandler } from 'react-hook-form';
+import { useState, useEffect } from 'react';
+import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { getAiPsychologistResponse, type GetAiPsychologistResponseInput, type GetAiPsychologistResponseOutput } from '@/ai/flows/get-ai-psychologist-response';
 import { Loader2, Sparkles, MessageSquare, Activity } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useToast } from "@/hooks/use-toast";
+import { db, MOCK_USER_ID, collection, addDoc, query, where, orderBy, getDocs } from '@/lib/firebase';
 
 const formSchema = z.object({
   feelings: z.string().min(10, { message: "Descreva seus sentimentos com pelo menos 10 caracteres." }),
@@ -20,16 +23,23 @@ const formSchema = z.object({
 
 type PsychologistFormValues = z.infer<typeof formSchema>;
 
-interface ChatEntry {
-  id: string;
+interface ChatEntryFirestore {
+  userId: string;
   userInput: PsychologistFormValues;
   aiResponse: GetAiPsychologistResponseOutput;
-  timestamp: Date;
+  timestamp: Date; // Firebase Timestamp
 }
+
+interface ChatEntry extends ChatEntryFirestore {
+  id: string; // Firestore document ID
+}
+
 
 export default function AiPsychologistPage() {
   const [chatHistory, setChatHistory] = useState<ChatEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const { toast } = useToast();
 
   const form = useForm<PsychologistFormValues>({
     resolver: zodResolver(formSchema),
@@ -39,21 +49,67 @@ export default function AiPsychologistPage() {
     },
   });
 
+  const fetchChatHistory = async () => {
+    setIsLoadingHistory(true);
+    try {
+      const q = query(
+        collection(db, "mindset_logs"),
+        where("userId", "==", MOCK_USER_ID), // Replace with actual user ID
+        orderBy("timestamp", "desc")
+      );
+      const querySnapshot = await getDocs(q);
+      const fetchedHistory: ChatEntry[] = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        fetchedHistory.push({
+          ...data,
+          id: doc.id,
+          timestamp: (data.timestamp as any).toDate ? (data.timestamp as any).toDate() : new Date(data.timestamp)
+        } as ChatEntry);
+      });
+      setChatHistory(fetchedHistory);
+    } catch (error) {
+      console.error("Error fetching chat history:", error);
+      toast({
+        variant: "destructive",
+        title: "Erro ao Carregar Histórico",
+        description: "Não foi possível buscar o histórico de conversas.",
+      });
+    }
+    setIsLoadingHistory(false);
+  };
+
+  useEffect(() => {
+    fetchChatHistory();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const onSubmit: SubmitHandler<PsychologistFormValues> = async (data) => {
     setIsLoading(true);
     try {
       const response = await getAiPsychologistResponse(data);
-      const newEntry: ChatEntry = {
-        id: new Date().toISOString(),
+      
+      const newEntryToSave: ChatEntryFirestore = {
+        userId: MOCK_USER_ID, // Replace with actual user ID
         userInput: data,
         aiResponse: response,
         timestamp: new Date(),
       };
-      setChatHistory(prev => [newEntry, ...prev]);
-      form.reset(); 
+      await addDoc(collection(db, "mindset_logs"), newEntryToSave);
+      
+      toast({
+        title: "Resposta Recebida!",
+        description: "Sua conversa com o Psicólogo IA foi salva.",
+      });
+      form.reset();
+      fetchChatHistory(); // Refresh history
     } catch (error) {
-      console.error("Error getting AI response:", error);
-      // Handle error display
+      console.error("Error getting AI response or saving log:", error);
+      toast({
+        variant: "destructive",
+        title: "Erro na Interação",
+        description: "Não foi possível obter resposta da IA ou salvar o log.",
+      });
     }
     setIsLoading(false);
   };
@@ -119,7 +175,7 @@ export default function AiPsychologistPage() {
             </CardContent>
           </Card>
 
-          {chatHistory.length > 0 && (
+          { (isLoadingHistory || chatHistory.length > 0) && (
             <Card className="mt-8">
               <CardHeader>
                 <CardTitle className="font-headline flex items-center">
@@ -127,21 +183,27 @@ export default function AiPsychologistPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <ScrollArea className="h-[400px] pr-4">
-                  <div className="space-y-6">
-                    {chatHistory.map(entry => (
-                      <div key={entry.id} className="p-4 border rounded-lg">
-                        <p className="text-sm text-muted-foreground mb-1">
-                          {entry.timestamp.toLocaleString('pt-BR')} - Emoção: {entry.userInput.emotionalState}/10
-                        </p>
-                        <p className="font-semibold mb-1">Você:</p>
-                        <p className="text-sm mb-3 whitespace-pre-line bg-muted p-2 rounded">{entry.userInput.feelings}</p>
-                        <p className="font-semibold mb-1 text-primary">IA Psicólogo:</p>
-                        <p className="text-sm whitespace-pre-line bg-primary/10 p-2 rounded">{entry.aiResponse.advice}</p>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
+                {isLoadingHistory ? (
+                  <p>Carregando histórico...</p>
+                ) : chatHistory.length === 0 ? (
+                  <p className="text-muted-foreground">Nenhuma conversa anterior encontrada.</p>
+                ) : (
+                  <ScrollArea className="h-[400px] pr-4">
+                    <div className="space-y-6">
+                      {chatHistory.map(entry => (
+                        <div key={entry.id} className="p-4 border rounded-lg">
+                          <p className="text-sm text-muted-foreground mb-1">
+                            {entry.timestamp.toLocaleString('pt-BR')} - Emoção: {entry.userInput.emotionalState}/10
+                          </p>
+                          <p className="font-semibold mb-1">Você:</p>
+                          <p className="text-sm mb-3 whitespace-pre-line bg-muted p-2 rounded">{entry.userInput.feelings}</p>
+                          <p className="font-semibold mb-1 text-primary">IA Psicólogo:</p>
+                          <p className="text-sm whitespace-pre-line bg-primary/10 p-2 rounded">{entry.aiResponse.advice}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
               </CardContent>
             </Card>
           )}
