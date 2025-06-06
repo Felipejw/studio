@@ -6,7 +6,7 @@ import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Slider } from '@/components/ui/slider';
@@ -14,16 +14,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
-import { PlusCircle, Filter, ListChecks, TrendingUp, Meh, Repeat, CalendarIcon, Loader2, Sun, Moon, CloudSun } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { PlusCircle, Filter, ListChecks, TrendingUp, Meh, Repeat, CalendarIcon, Loader2, Sun, Moon, CloudSun, Trash2, BarChart3, LineChart } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { db, collection, addDoc, getDocs, query, where, orderBy, Timestamp } from '@/lib/firebase';
+import { db, collection, addDoc, getDocs, query, where, orderBy, Timestamp, deleteDoc, doc } from '@/lib/firebase';
 import { useAuth } from '@/components/auth-provider';
+import { ResponsiveContainer, LineChart as RechartsLineChart, BarChart as RechartsBarChart, XAxis, YAxis, Tooltip as RechartsTooltip, Line as RechartsLine, Bar as RechartsBar, CartesianGrid, Legend, Cell } from 'recharts';
+import { ChartContainer, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
+
 
 const tradeSchema = z.object({
   date: z.date({ required_error: "Data é obrigatória." }),
@@ -45,7 +49,7 @@ const tradeSchema = z.object({
     });
   }
   if ((data.result === 'gain' || data.result === 'loss') && data.amount <= 0) {
-    ctx.addIssue({
+     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "Para 'Gain' ou 'Loss', o valor deve ser um número positivo e maior que zero.",
       path: ['amount'],
@@ -74,12 +78,23 @@ interface TradeEntry extends Omit<TradeEntryFirestore, 'date'> {
   date: Date; 
 }
 
+const chartConfigBase = {
+  profit: { label: "P/L", color: "hsl(var(--chart-1))" },
+  emotionBefore: { label: "Emoção (Antes)", color: "hsl(var(--chart-2))" },
+  emotionAfter: { label: "Emoção (Depois)", color: "hsl(var(--chart-3))" },
+  avgWin: { label: "Lucro Médio", color: "hsl(var(--chart-2))" },
+  avgLoss: { label: "Prejuízo Médio", color: "hsl(var(--destructive))" },
+} satisfies ChartConfig;
+
 
 export default function TradeLogPage() {
   const [trades, setTrades] = useState<TradeEntry[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [filterDate, setFilterDate] = useState<Date | undefined>();
   const [isLoadingTrades, setIsLoadingTrades] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [tradeToDelete, setTradeToDelete] = useState<TradeEntry | null>(null);
+
   const { toast } = useToast();
   const { userId, user } = useAuth();
 
@@ -115,25 +130,28 @@ export default function TradeLogPage() {
       );
       const querySnapshot = await getDocs(q);
       const fetchedTrades: TradeEntry[] = [];
-      querySnapshot.forEach((doc) => {
-        const data = doc.data() as Partial<TradeEntryFirestore>; // Use Partial for safer access
-        // Check if data.date exists and is a Firestore Timestamp
+      querySnapshot.forEach((docSnap) => { // Renamed doc to docSnap to avoid conflict
+        const data = docSnap.data() as Partial<TradeEntryFirestore>; 
         if (data.date && typeof (data.date as any).toDate === 'function') {
           fetchedTrades.push({ 
-            ...(data as TradeEntryFirestore), // Cast back to full type after check
-            id: doc.id,
+            ...(data as TradeEntryFirestore), 
+            id: docSnap.id,
             date: (data.date as Timestamp).toDate() 
-          } as TradeEntry); // Ensure final object matches TradeEntry
+          } as TradeEntry); 
         } else {
-          console.warn(`Document ${doc.id} has an invalid or missing 'date' field that is not a Firestore Timestamp. Data:`, data);
+          console.warn(`Document ${docSnap.id} has an invalid or missing 'date' field that is not a Firestore Timestamp. Data:`, data);
         }
       });
       setTrades(fetchedTrades);
     } catch (error: any) {
       console.error("Erro DETALHADO ao CARREGAR trades (objeto completo):", error);
-      let description = `Não foi possível buscar seus trades. Verifique o console para detalhes.`;
-      if (error.message && error.message.includes("firestore/failed-precondition") && error.message.includes("index")) {
-        description = `O Firestore requer um índice para esta consulta. Verifique o CONSOLE do navegador para o LINK para criar o índice. Cód: ${error.code || 'failed-precondition'}`;
+      console.error("Mensagem de erro (carregar trades):", error.message);
+      console.error("Código do erro (carregar trades):", error.code);
+      console.error("Stack do erro (carregar trades):", error.stack);
+
+      let description = `Não foi possível buscar seus trades.`;
+      if (error.code === 'failed-precondition' && error.message && error.message.includes("index")) {
+        description = `O Firestore requer um ÍNDICE para esta consulta. Verifique o CONSOLE do navegador para o LINK para criar o índice. Cód: ${error.code || 'failed-precondition'}`;
       } else if (error.code) {
          description = `Não foi possível buscar seus trades. Cód: ${error.code}. Msg: ${error.message || String(error)}. Verifique o console.`;
       }
@@ -142,17 +160,8 @@ export default function TradeLogPage() {
         variant: "destructive",
         title: "Erro ao Carregar Trades",
         description: description,
-        duration: 15000, // Longer duration for index creation link
+        duration: 15000, 
       });
-      if (error.message) {
-        console.error("Mensagem de erro (carregar trades):", error.message);
-      }
-      if (error.code) {
-        console.error("Código do erro (carregar trades):", error.code);
-      }
-      if (error.stack) {
-        console.error("Stack do erro (carregar trades):", error.stack);
-      }
     }
     setIsLoadingTrades(false);
   };
@@ -215,15 +224,9 @@ export default function TradeLogPage() {
       fetchTrades(); 
     } catch (error: any) {
       console.error("Erro DETALHADO ao SALVAR trade (objeto completo):", error);
-      if (error.message) {
-        console.error("Mensagem de erro (salvar trade):", error.message);
-      }
-      if (error.code) {
-        console.error("Código do erro (salvar trade):", error.code);
-      }
-      if (error.stack) {
-        console.error("Stack do erro (salvar trade):", error.stack);
-      }
+      console.error("Mensagem de erro (salvar trade):", error.message);
+      console.error("Código do erro (salvar trade):", error.code);
+      console.error("Stack do erro (salvar trade):", error.stack);
       toast({
         variant: "destructive",
         title: "Erro ao Salvar Trade",
@@ -233,20 +236,141 @@ export default function TradeLogPage() {
     }
   };
 
+  const handleDeleteTrade = async () => {
+    if (!tradeToDelete || !userId) {
+      toast({ variant: "destructive", title: "Erro", description: "Nenhum trade selecionado para exclusão ou usuário não autenticado." });
+      return;
+    }
+    setIsDeleting(true);
+    try {
+      await deleteDoc(doc(db, "trades", tradeToDelete.id));
+      toast({
+        title: "Trade Excluído!",
+        description: `O trade do ativo ${tradeToDelete.asset} foi excluído.`,
+      });
+      setTrades(prevTrades => prevTrades.filter(trade => trade.id !== tradeToDelete.id));
+      setTradeToDelete(null);
+    } catch (error: any) {
+      console.error("Erro ao excluir trade:", error);
+      toast({
+        variant: "destructive",
+        title: "Erro ao Excluir",
+        description: `Não foi possível excluir o trade. ${error.message || ""}`,
+      });
+    }
+    setIsDeleting(false);
+  };
+
   const filteredTrades = useMemo(() => {
     if (!filterDate) return trades;
-    return trades.filter(trade => format(trade.date, "yyyy-MM-dd") === format(filterDate, "yyyy-MM-dd"));
+    const filterDayStart = new Date(filterDate);
+    filterDayStart.setHours(0, 0, 0, 0);
+    const filterDayEnd = new Date(filterDate);
+    filterDayEnd.setHours(23, 59, 59, 999);
+
+    return trades.filter(trade => {
+        const tradeDate = trade.date; // Already a Date object
+        return tradeDate >= filterDayStart && tradeDate <= filterDayEnd;
+    });
   }, [trades, filterDate]);
 
   const totalProfit = useMemo(() => {
     return filteredTrades.reduce((acc, trade) => acc + trade.profit, 0);
   }, [filteredTrades]);
 
+  const chartDataPL = useMemo(() => {
+    if (filteredTrades.length === 0) return [];
+    // If a specific day is filtered, show trades individually, otherwise aggregate by day
+    if (filterDate) {
+      return filteredTrades
+        .sort((a,b) => a.date.getTime() - b.date.getTime()) // Sort by time within the day
+        .map((trade, index) => ({
+          name: `${format(trade.date, 'HH:mm')} (${trade.asset.substring(0,6)})`,
+          profit: trade.profit
+        }));
+    } else {
+        const dailyData = filteredTrades.reduce((acc, trade) => {
+        const day = format(trade.date, 'yyyy-MM-dd');
+        if (!acc[day]) {
+            acc[day] = { date: day, profit: 0, count: 0 };
+        }
+        acc[day].profit += trade.profit;
+        acc[day].count++;
+        return acc;
+        }, {} as Record<string, { date: string; profit: number; count: number }>);
+
+        return Object.values(dailyData)
+        .sort((a,b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())
+        .map(d => ({
+            name: format(parseISO(d.date), 'dd/MM', { locale: ptBR }),
+            profit: d.profit,
+        }));
+    }
+  }, [filteredTrades, filterDate]);
+
+  const chartDataEmotion = useMemo(() => {
+    if (filteredTrades.length === 0) return [];
+     if (filterDate) {
+        return filteredTrades
+            .sort((a,b) => a.date.getTime() - b.date.getTime())
+            .map((trade, index) => ({
+            name: `${format(trade.date, 'HH:mm')} (${trade.asset.substring(0,6)})`,
+            emotionBefore: trade.emotionBefore,
+            emotionAfter: trade.emotionAfter,
+            }));
+    } else {
+        const dailyData = filteredTrades.reduce((acc, trade) => {
+            const day = format(trade.date, 'yyyy-MM-dd');
+            if (!acc[day]) {
+                acc[day] = { date: day, emotionBeforeSum: 0, emotionAfterSum: 0, count: 0 };
+            }
+            acc[day].emotionBeforeSum += trade.emotionBefore;
+            acc[day].emotionAfterSum += trade.emotionAfter;
+            acc[day].count++;
+            return acc;
+        }, {} as Record<string, { date: string; emotionBeforeSum: number; emotionAfterSum: number; count: number }>);
+
+        return Object.values(dailyData)
+            .sort((a,b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())
+            .map(d => ({
+            name: format(parseISO(d.date), 'dd/MM', { locale: ptBR }),
+            emotionBefore: d.count > 0 ? parseFloat((d.emotionBeforeSum / d.count).toFixed(1)) : 0,
+            emotionAfter: d.count > 0 ? parseFloat((d.emotionAfterSum / d.count).toFixed(1)) : 0,
+            }));
+    }
+  }, [filteredTrades, filterDate]);
+
+  const performanceMetrics = useMemo(() => {
+    const winningTrades = filteredTrades.filter(t => t.profit > 0);
+    const losingTrades = filteredTrades.filter(t => t.profit < 0);
+
+    const totalWinAmount = winningTrades.reduce((sum, t) => sum + t.profit, 0);
+    const totalLossAmount = losingTrades.reduce((sum, t) => sum + Math.abs(t.profit), 0);
+
+    const avgWin = winningTrades.length > 0 ? totalWinAmount / winningTrades.length : 0;
+    const avgLoss = losingTrades.length > 0 ? totalLossAmount / losingTrades.length : 0;
+    
+    const payoffRatio = avgLoss > 0 ? avgWin / avgLoss : 0;
+
+    return {
+      avgWin,
+      avgLoss,
+      payoffRatio,
+      numWinningTrades: winningTrades.length,
+      numLosingTrades: losingTrades.length,
+    };
+  }, [filteredTrades]);
+
+  const payoffChartData = [
+    { name: "Lucro Médio", value: performanceMetrics.avgWin },
+    { name: "Prejuízo Médio", value: performanceMetrics.avgLoss },
+  ];
+
   if (!user) return null;
 
   return (
     <div className="container mx-auto py-8">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-wrap justify-between items-center mb-8 gap-4">
         <h1 className="text-3xl font-bold font-headline">Diário de Operações</h1>
         <Dialog open={isDialogOpen} onOpenChange={(isOpen) => {
           setIsDialogOpen(isOpen);
@@ -494,73 +618,172 @@ export default function TradeLogPage() {
         {filterDate && <Button variant="ghost" onClick={() => setFilterDate(undefined)} disabled={isLoadingTrades}>Limpar filtro</Button>}
       </div>
 
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle className="font-headline flex items-center"><ListChecks className="mr-2 h-5 w-5" />Trades Registrados</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoadingTrades ? (
-            <div className="flex justify-center items-center py-10">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="ml-2">Carregando trades...</p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Ativo</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Período</TableHead>
-                  <TableHead>Resultado (R$)</TableHead>
-                  <TableHead>Emoção (Antes/Depois)</TableHead>
-                  <TableHead>Setup</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredTrades.length > 0 ? filteredTrades.map(trade => (
-                  <TableRow key={trade.id}>
-                    <TableCell>{format(trade.date, "dd/MM/yyyy HH:mm", { locale: ptBR })}</TableCell>
-                    <TableCell>{trade.asset}</TableCell>
-                    <TableCell>{trade.type === 'compra' ? 'Compra' : 'Venda'}</TableCell>
-                    <TableCell className="capitalize">{trade.period}</TableCell>
-                    <TableCell className={trade.profit > 0 ? 'text-green-600' : trade.profit < 0 ? 'text-red-600' : ''}>
-                      {trade.profit.toFixed(2)}
-                    </TableCell>
-                    <TableCell>{trade.emotionBefore} / {trade.emotionAfter}</TableCell>
-                    <TableCell>{trade.setup || 'N/A'}</TableCell>
-                  </TableRow>
-                )) : (
+      <AlertDialog>
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="font-headline flex items-center"><ListChecks className="mr-2 h-5 w-5" />Trades Registrados</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoadingTrades ? (
+              <div className="flex justify-center items-center py-10">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <p className="ml-2">Carregando trades...</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center">Nenhum trade encontrado para {filterDate ? `o dia ${format(filterDate, "dd/MM/yyyy", { locale: ptBR })}` : 'o período selecionado'}.</TableCell>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Ativo</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Período</TableHead>
+                    <TableHead>Resultado (R$)</TableHead>
+                    <TableHead>Emoção (A/D)</TableHead>
+                    <TableHead>Setup</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredTrades.length > 0 ? filteredTrades.map(trade => (
+                    <TableRow key={trade.id}>
+                      <TableCell>{format(trade.date, "dd/MM/yy HH:mm", { locale: ptBR })}</TableCell>
+                      <TableCell>{trade.asset}</TableCell>
+                      <TableCell>{trade.type === 'compra' ? 'Compra' : 'Venda'}</TableCell>
+                      <TableCell className="capitalize">{trade.period}</TableCell>
+                      <TableCell className={trade.profit > 0 ? 'text-green-600' : trade.profit < 0 ? 'text-red-600' : ''}>
+                        {trade.profit.toFixed(2)}
+                      </TableCell>
+                      <TableCell>{trade.emotionBefore}/{trade.emotionAfter}</TableCell>
+                      <TableCell>{trade.setup || 'N/A'}</TableCell>
+                      <TableCell className="text-right">
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" onClick={() => setTradeToDelete(trade)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </AlertDialogTrigger>
+                      </TableCell>
+                    </TableRow>
+                  )) : (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center h-24">Nenhum trade encontrado para {filterDate ? `o dia ${format(filterDate, "dd/MM/yyyy", { locale: ptBR })}` : 'o período selecionado'}.</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+                {filteredTrades.length > 0 && (
+                    <TableCaption>Total P/L {filterDate ? `do dia ${format(filterDate, "dd/MM/yyyy", {locale: ptBR})}` : "do período"}: <span className={totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}>R$ {totalProfit.toFixed(2)}</span></TableCaption>
                 )}
-              </TableBody>
-              {filteredTrades.length > 0 && (
-                  <TableCaption>Total P/L do período: <span className={totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}>R$ {totalProfit.toFixed(2)}</span></TableCaption>
-              )}
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+                <AlertDialogDescription>
+                Tem certeza que deseja excluir o trade do ativo "{tradeToDelete?.asset}" de {tradeToDelete?.date ? format(tradeToDelete.date, "dd/MM/yyyy HH:mm", {locale: ptBR}) : ''}? Esta ação não pode ser desfeita.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setTradeToDelete(null)} disabled={isDeleting}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteTrade} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
+                {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Excluir
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-      <div className="grid md:grid-cols-3 gap-6">
+
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         <Card>
-          <CardHeader><CardTitle className="font-headline flex items-center"><TrendingUp className="mr-2 h-5 w-5"/>Lucro x Perda</CardTitle></CardHeader>
-          <CardContent className="h-64 flex items-center justify-center bg-muted/50 rounded-md">
-            <p className="text-muted-foreground">Gráfico de Lucro x Perda (Em breve)</p>
+          <CardHeader>
+            <CardTitle className="font-headline flex items-center"><BarChart3 className="mr-2 h-5 w-5 text-primary"/>Lucro x Perda {filterDate ? `(Dia ${format(filterDate, "dd/MM", {locale: ptBR})})` : "(Diário)"}</CardTitle>
+            <CardDescription>Resultado financeiro dos trades.</CardDescription>
+          </CardHeader>
+          <CardContent className="h-80">
+            {isLoadingTrades ? (<Loader2 className="mx-auto mt-12 h-8 w-8 animate-spin text-primary" />) : 
+             chartDataPL.length > 0 ? (
+              <ChartContainer config={chartConfigBase} className="h-full w-full">
+                <RechartsBarChart data={chartDataPL} margin={{ top: 5, right: 5, left: -25, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false}/>
+                  <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} fontSize={12} />
+                  <YAxis tickLine={false} axisLine={false} tickMargin={8} fontSize={12} width={40}/>
+                  <RechartsTooltip 
+                    cursor={{fill: 'hsl(var(--muted))'}}
+                    content={<ChartTooltipContent indicator="dot" />} 
+                    formatter={(value: number) => `R$ ${value.toFixed(2)}`}
+                  />
+                  <RechartsBar dataKey="profit" radius={[4, 4, 0, 0]}>
+                    {chartDataPL.map((entry, index) => (
+                        <Cell key={`cell-pl-${index}`} fill={entry.profit >= 0 ? "hsl(var(--chart-2))" : "hsl(var(--destructive))"} />
+                    ))}
+                  </RechartsBar>
+                </RechartsBarChart>
+              </ChartContainer>
+            ) : (<p className="text-center text-muted-foreground pt-10">Sem dados de P/L para exibir.</p>)}
           </CardContent>
         </Card>
+        
         <Card>
-          <CardHeader><CardTitle className="font-headline flex items-center"><Meh className="mr-2 h-5 w-5"/>Emoção Média</CardTitle></CardHeader>
-          <CardContent className="h-64 flex items-center justify-center bg-muted/50 rounded-md">
-             <p className="text-muted-foreground">Gráfico de Emoção Média (Em breve)</p>
+          <CardHeader>
+            <CardTitle className="font-headline flex items-center"><LineChart className="mr-2 h-5 w-5 text-primary"/>Emoção Média {filterDate ? `(Dia ${format(filterDate, "dd/MM", {locale: ptBR})})` : "(Diária)"}</CardTitle>
+             <CardDescription>Variação da emoção antes e depois dos trades.</CardDescription>
+          </CardHeader>
+          <CardContent className="h-80">
+             {isLoadingTrades ? (<Loader2 className="mx-auto mt-12 h-8 w-8 animate-spin text-primary" />) : 
+             chartDataEmotion.length > 0 ? (
+              <ChartContainer config={chartConfigBase} className="h-full w-full">
+                <RechartsLineChart data={chartDataEmotion} margin={{ top: 5, right: 5, left: -25, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false}/>
+                  <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} fontSize={12} />
+                  <YAxis domain={[0, 10]} tickLine={false} axisLine={false} tickMargin={8} fontSize={12} width={40}/>
+                  <RechartsTooltip 
+                    cursor={{strokeDasharray: '3 3'}}
+                    content={<ChartTooltipContent indicator="dot" />} 
+                  />
+                  <Legend verticalAlign="top" height={36}/>
+                  <RechartsLine type="monotone" dataKey="emotionBefore" stroke="var(--color-emotionBefore)" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} name="Antes" />
+                  <RechartsLine type="monotone" dataKey="emotionAfter" stroke="var(--color-emotionAfter)" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} name="Depois"/>
+                </RechartsLineChart>
+              </ChartContainer>
+            ) : (<p className="text-center text-muted-foreground pt-10">Sem dados de emoção para exibir.</p>)}
           </CardContent>
         </Card>
+
         <Card>
-          <CardHeader><CardTitle className="font-headline flex items-center"><Repeat className="mr-2 h-5 w-5"/>R/R Médio</CardTitle></CardHeader>
-          <CardContent className="h-64 flex items-center justify-center bg-muted/50 rounded-md">
-            <p className="text-muted-foreground">Gráfico de R/R Médio (Em breve)</p>
+          <CardHeader>
+            <CardTitle className="font-headline flex items-center"><Repeat className="mr-2 h-5 w-5 text-primary"/>Desempenho Médio</CardTitle>
+             <CardDescription>Lucro e prejuízo médio por trade.</CardDescription>
+          </CardHeader>
+          <CardContent className="h-80">
+            {isLoadingTrades ? (<Loader2 className="mx-auto mt-12 h-8 w-8 animate-spin text-primary" />) : 
+             filteredTrades.length > 0 ? (
+            <>
+                <div className="space-y-2 mb-4 text-sm">
+                    <div className="flex justify-between"><span>Trades Vencedores:</span> <span className="font-semibold">{performanceMetrics.numWinningTrades}</span></div>
+                    <div className="flex justify-between"><span>Trades Perdedores:</span> <span className="font-semibold">{performanceMetrics.numLosingTrades}</span></div>
+                    <div className="flex justify-between"><span>Lucro Médio (Gain):</span> <span className="font-semibold text-green-600">R$ {performanceMetrics.avgWin.toFixed(2)}</span></div>
+                    <div className="flex justify-between"><span>Prejuízo Médio (Loss):</span> <span className="font-semibold text-red-600">R$ {performanceMetrics.avgLoss.toFixed(2)}</span></div>
+                    <div className="flex justify-between"><span>Taxa Lucro/Prejuízo (Payoff):</span> <span className="font-semibold">{performanceMetrics.payoffRatio.toFixed(2)}</span></div>
+                </div>
+                <ChartContainer config={chartConfigBase} className="h-[150px] w-full">
+                    <RechartsBarChart data={payoffChartData} layout="vertical" margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                        <XAxis type="number" hide />
+                        <YAxis dataKey="name" type="category" hide />
+                        <RechartsTooltip 
+                            cursor={{fill: 'hsl(var(--muted))'}}
+                            content={<ChartTooltipContent indicator="dot" hideLabel />} 
+                            formatter={(value: number) => `R$ ${value.toFixed(2)}`}
+                        />
+                        <RechartsBar dataKey="value" radius={[4, 4, 4, 4]} barSize={30}>
+                             <Cell fill="hsl(var(--chart-2))" />
+                             <Cell fill="hsl(var(--destructive))" />
+                        </RechartsBar>
+                    </RechartsBarChart>
+                </ChartContainer>
+            </>
+            ) : (<p className="text-center text-muted-foreground pt-10">Sem dados de desempenho para exibir.</p>)}
           </CardContent>
         </Card>
       </div>
@@ -568,3 +791,5 @@ export default function TradeLogPage() {
   );
 }
 
+
+    
