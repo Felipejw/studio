@@ -10,13 +10,9 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
 export function AppHeader() {
-  const { dailyResult, isLoadingDailyResult, lastUpdated } = useDashboardHeader();
+  const { dailyResult, isLoadingDailyResult } = useDashboardHeader(); 
   const pathname = usePathname();
   const isOnDashboard = pathname === '/dashboard';
-
-  // This is a bit of a hack to force re-render when context updates due to state structure
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _ = lastUpdated; 
 
   const renderDailyResult = () => {
     if (!isOnDashboard) return null;
@@ -31,7 +27,7 @@ export function AppHeader() {
     }
 
     if (dailyResult === null) {
-      return <span className="text-sm text-muted-foreground">P/L Indisponível</span>;
+      return <span className="text-sm text-muted-foreground">P/L Dia: N/D</span>;
     }
 
     const resultColor = dailyResult > 0 ? 'text-green-600' : dailyResult < 0 ? 'text-red-600' : 'text-muted-foreground';

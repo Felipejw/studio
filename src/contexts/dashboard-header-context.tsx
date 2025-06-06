@@ -2,14 +2,13 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { createContext, useContext, useState, useMemo } from 'react';
+import { createContext, useContext, useState, useMemo, useCallback } from 'react';
 
 interface DashboardHeaderContextType {
   dailyResult: number | null;
   isLoadingDailyResult: boolean;
   setDailyResult: (result: number | null) => void;
   setIsLoadingDailyResult: (loading: boolean) => void;
-  lastUpdated: number | null; // To help trigger re-renders if needed
 }
 
 const DashboardHeaderContext = createContext<DashboardHeaderContextType | undefined>(undefined);
@@ -17,27 +16,21 @@ const DashboardHeaderContext = createContext<DashboardHeaderContextType | undefi
 export function DashboardHeaderProvider({ children }: { children: ReactNode }) {
   const [dailyResult, setDailyResultState] = useState<number | null>(null);
   const [isLoadingDailyResult, setIsLoadingDailyResultState] = useState<boolean>(true);
-  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
 
-
-  const setDailyResult = (result: number | null) => {
+  const setDailyResult = useCallback((result: number | null) => {
     setDailyResultState(result);
-    setLastUpdated(Date.now());
-  };
+  }, []); // setDailyResultState is stable
 
-  const setIsLoadingDailyResult = (loading: boolean) => {
+  const setIsLoadingDailyResult = useCallback((loading: boolean) => {
     setIsLoadingDailyResultState(loading);
-    setLastUpdated(Date.now());
-  };
+  }, []); // setIsLoadingDailyResultState is stable
 
   const contextValue = useMemo(() => ({
     dailyResult,
     isLoadingDailyResult,
     setDailyResult,
     setIsLoadingDailyResult,
-    lastUpdated,
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [dailyResult, isLoadingDailyResult, lastUpdated]);
+  }), [dailyResult, isLoadingDailyResult, setDailyResult, setIsLoadingDailyResult]);
 
   return (
     <DashboardHeaderContext.Provider value={contextValue}>
