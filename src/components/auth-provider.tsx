@@ -35,24 +35,39 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   useEffect(() => {
-    if (loading) return; // Don't run redirect logic until auth state is determined
+    if (loading) {
+      return; // Don't run redirect logic until auth state is determined
+    }
 
     const isAuthPage = pathname === '/login' || pathname === '/signup';
-    // Check if the current path is one of the protected app routes defined in navItems
-    const isAppRoute = navItems.some(item => pathname.startsWith(item.href));
+    // Ensure navItems hrefs are treated as protected app routes.
+    // Exclude '/' from being a protected app route in this specific logic if it's handled separately.
+    const isProtectedAppPage = navItems.some(item => item.href !== '/' && pathname.startsWith(item.href));
 
     if (!user) { // User is NOT logged in
-      if (pathname === '/') { // User is on root path
-        router.replace('/login');
-      } else if (isAppRoute && !isAuthPage) { // User is trying to access a protected app page
-        router.replace('/login');
+      if (pathname === '/') {
+        // User is on root path, should go to login
+        if (pathname !== '/login') {
+          router.replace('/login');
+        }
+      } else if (isProtectedAppPage && !isAuthPage) {
+        // User is trying to access a protected app page but is not on an auth page already
+        if (pathname !== '/login') {
+          router.replace('/login');
+        }
       }
-      // If !user and on an auth page (e.g. /login, /signup), or any other non-app, non-root public page, do nothing.
+      // If !user and on an auth page (e.g. /login, /signup), or any other non-protected public page, do nothing.
     } else { // User IS logged in
-      if (pathname === '/') { // User is on root path
-        router.replace('/dashboard');
-      } else if (isAuthPage) { // Logged in user trying to access login/signup page
-        router.replace('/dashboard');
+      if (pathname === '/') {
+        // User is on root path, should go to dashboard
+        if (pathname !== '/dashboard') {
+          router.replace('/dashboard');
+        }
+      } else if (isAuthPage) {
+        // Logged in user trying to access login/signup page
+        if (pathname !== '/dashboard') {
+          router.replace('/dashboard');
+        }
       }
       // If user is logged in and on an app page (and not / or auth page), do nothing.
     }
@@ -67,9 +82,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     );
   }
 
-  // At this point, loading is false. User state is determined.
-  // The useEffect above is handling redirects.
-  // We can now provide the context for children to consume.
   return (
     <AuthContext.Provider value={{ user, loading, userId: user?.uid || null }}>
       {children}
