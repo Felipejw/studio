@@ -45,7 +45,7 @@ const tradeSchema = z.object({
   if ((data.result === 'gain' || data.result === 'loss') && data.amount <= 0) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "Para 'Gain' ou 'Loss', o valor deve ser maior que zero.",
+      message: "Para 'Gain' ou 'Loss', o valor deve ser um número positivo e maior que zero.",
       path: ['amount'],
     });
   }
@@ -142,7 +142,7 @@ export default function TradeLogPage() {
 
   const onSubmit: SubmitHandler<TradeFormValues> = async (data) => {
     if (!userId) {
-      toast({ variant: "destructive", title: "Erro de Autenticação", description: "Usuário não autenticado." });
+      toast({ variant: "destructive", title: "Erro de Autenticação", description: "Usuário não autenticado. Por favor, faça login novamente." });
       return;
     }
     try {
@@ -175,12 +175,12 @@ export default function TradeLogPage() {
       form.reset();
       setIsDialogOpen(false);
       fetchTrades(); 
-    } catch (error) {
-      console.error("Error saving trade:", error);
+    } catch (error: any) {
+      console.error("Error saving trade:", error, error.stack);
       toast({
         variant: "destructive",
         title: "Erro ao Salvar Trade",
-        description: "Não foi possível registrar sua operação.",
+        description: "Não foi possível registrar sua operação. Verifique o console para mais detalhes.",
       });
     }
   };
