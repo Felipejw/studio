@@ -6,7 +6,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { auth, onAuthStateChanged } from '@/lib/firebase';
 import { useRouter, usePathname } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
-import { navItems } from '@/config/nav'; // Import navItems
+// navItems não é mais usado aqui para a lógica de redirecionamento principal
 
 interface AuthContextType {
   user: User | null;
@@ -36,40 +36,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     if (loading) {
-      return; // Don't run redirect logic until auth state is determined
+      return; // Não faz nada enquanto o estado de autenticação está carregando
     }
 
-    const isAuthPage = pathname === '/login' || pathname === '/signup';
-    // Ensure navItems hrefs are treated as protected app routes.
-    // Exclude '/' from being a protected app route in this specific logic if it's handled separately.
-    const isProtectedAppPage = navItems.some(item => item.href !== '/' && pathname.startsWith(item.href));
+    const publicPaths = ['/login', '/signup'];
+    const isPublicPage = publicPaths.includes(pathname);
 
-    if (!user) { // User is NOT logged in
-      if (pathname === '/') {
-        // User is on root path, should go to login
-        if (pathname !== '/login') {
-          router.replace('/login');
-        }
-      } else if (isProtectedAppPage && !isAuthPage) {
-        // User is trying to access a protected app page but is not on an auth page already
-        if (pathname !== '/login') {
-          router.replace('/login');
-        }
+    if (!user) { // Usuário NÃO está logado
+      if (!isPublicPage && pathname !== '/login') {
+        // Se não está logado, não está numa página pública, e não está já indo para /login
+        router.replace('/login');
       }
-      // If !user and on an auth page (e.g. /login, /signup), or any other non-protected public page, do nothing.
-    } else { // User IS logged in
-      if (pathname === '/') {
-        // User is on root path, should go to dashboard
-        if (pathname !== '/dashboard') {
-          router.replace('/dashboard');
-        }
-      } else if (isAuthPage) {
-        // Logged in user trying to access login/signup page
-        if (pathname !== '/dashboard') {
-          router.replace('/dashboard');
-        }
+      // Se não está logado e está em /login ou /signup, ou outra página que deveria ser pública, não faz nada aqui.
+    } else { // Usuário ESTÁ logado
+      if (isPublicPage && pathname !== '/dashboard') {
+        // Se está logado, está numa página de login/signup, e não está já indo para /dashboard
+        router.replace('/dashboard');
       }
-      // If user is logged in and on an app page (and not / or auth page), do nothing.
+      // Se está logado e em qualquer outra página (presumivelmente protegida ou o dashboard), não faz nada.
     }
   }, [user, loading, router, pathname]);
 
