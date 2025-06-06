@@ -1,6 +1,6 @@
 
 import type { LucideIcon } from 'lucide-react';
-import { LayoutDashboard, FileText, BookOpenText, Brain, Gauge, User, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, FileText, BookOpenText, Brain, Gauge, User, TrendingUp, DollarSign } from 'lucide-react'; // Added DollarSign
 
 export interface NavItem {
   title: string;
@@ -48,10 +48,15 @@ export const navItems: NavItem[] = [
     label: 'Controle de Risco',
   },
   {
+    title: 'Planos', // New Pricing Page
+    href: '/pricing',
+    icon: DollarSign,
+    label: 'Nossos Planos',
+  },
+  {
     title: 'Perfil',
     href: '/profile',
     icon: User,
     label: 'Seu Perfil e Plano',
   },
 ];
-
