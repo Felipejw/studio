@@ -1,6 +1,6 @@
 
 import type { LucideIcon } from 'lucide-react';
-import { LayoutDashboard, FileText, BookOpenText, Brain, Gauge, User, DollarSign } from 'lucide-react';
+import { LayoutDashboard, FileText, BookOpenText, Brain, Gauge, User, DollarSign, Users as GroupsIcon } from 'lucide-react';
 
 export interface NavItem {
   title: string;
@@ -40,6 +40,12 @@ export const navItems: NavItem[] = [
     href: '/risk-manager',
     icon: Gauge,
     label: 'Controle de Risco',
+  },
+  {
+    title: 'Grupos de Traders',
+    href: '/trader-groups',
+    icon: GroupsIcon,
+    label: 'Comunidades de Trading',
   },
   {
     title: 'Planos',
