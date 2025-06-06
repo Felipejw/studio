@@ -4,22 +4,24 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { UserCircle, CreditCard, Settings, History, Download, Star, BarChartHorizontalBig, Edit } from 'lucide-react';
+import { UserCircle, CreditCard, Settings, History, Download, Star, BarChartHorizontalBig, Edit, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { db, MOCK_USER_ID, doc, getDoc, setDoc } from '@/lib/firebase';
+import { db, doc, getDoc, setDoc } from '@/lib/firebase';
+import { useAuth } from '@/components/auth-provider';
 
 type UserPlan = 'free' | 'pro' | 'vitalicio';
 
 interface UserProfileData {
+  uid: string;
   name: string;
   email: string;
   plan: UserPlan;
-  memberSince: string; // Store as ISO string or Firebase Timestamp
-  lastPayment?: string; // Store as ISO string or Firebase Timestamp
+  memberSince: string; 
+  lastPayment?: string; 
 }
 
 const consistencyLevels = [
@@ -37,34 +39,48 @@ export default function ProfilePage() {
   const [editForm, setEditForm] = useState({ name: '', email: '' });
 
   const { toast } = useToast();
+  const { user, userId } = useAuth();
 
-  const currentLevel = consistencyLevels[2]; // Example: Consistente - this would be calculated based on user activity
+  const currentLevel = consistencyLevels[2]; 
 
   const fetchUserProfile = async () => {
+    if (!userId) {
+      setIsLoading(false);
+      setUserProfile(null);
+      return;
+    }
     setIsLoading(true);
     try {
-      const userDocRef = doc(db, "users", MOCK_USER_ID); // Replace with actual user ID
+      const userDocRef = doc(db, "users", userId);
       const docSnap = await getDoc(userDocRef);
       if (docSnap.exists()) {
         const data = docSnap.data() as UserProfileData;
         setUserProfile(data);
         setEditForm({ name: data.name, email: data.email });
       } else {
-        // Create a default profile if it doesn't exist
-        const defaultProfile: UserProfileData = {
-          name: 'Trader Exemplo',
-          email: 'trader@exemplo.com',
-          plan: 'free',
-          memberSince: new Date().toISOString(),
-        };
-        await setDoc(userDocRef, defaultProfile);
-        setUserProfile(defaultProfile);
-        setEditForm({ name: defaultProfile.name, email: defaultProfile.email });
-        toast({ title: "Perfil Criado", description: "Seu perfil inicial foi configurado." });
+        // This case should ideally be handled at signup
+        // or if user document creation failed.
+        // For robustness, create a default if missing and user is authenticated.
+        if (user) {
+            const defaultProfile: UserProfileData = {
+              uid: user.uid,
+              name: user.displayName || 'Novo Usuário',
+              email: user.email || 'email@desconhecido.com',
+              plan: 'free',
+              memberSince: new Date().toISOString(),
+            };
+            await setDoc(userDocRef, defaultProfile);
+            setUserProfile(defaultProfile);
+            setEditForm({ name: defaultProfile.name, email: defaultProfile.email });
+            toast({ title: "Perfil Criado", description: "Seu perfil inicial foi configurado." });
+        } else {
+             setUserProfile(null); // No user, no profile
+        }
       }
     } catch (error) {
       console.error("Error fetching user profile:", error);
       toast({ variant: "destructive", title: "Erro ao Carregar Perfil" });
+      setUserProfile(null);
     }
     setIsLoading(false);
   };
@@ -72,12 +88,12 @@ export default function ProfilePage() {
   useEffect(() => {
     fetchUserProfile();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [userId, user]); // Depend on userId and user object
 
   const handlePlanChange = async (newPlan: UserPlan) => {
-    if (!userProfile) return;
+    if (!userProfile || !userId) return;
     try {
-      const userDocRef = doc(db, "users", MOCK_USER_ID); // Replace with actual user ID
+      const userDocRef = doc(db, "users", userId);
       const updatedProfile = { ...userProfile, plan: newPlan };
       await setDoc(userDocRef, updatedProfile, { merge: true });
       setUserProfile(updatedProfile);
@@ -93,10 +109,11 @@ export default function ProfilePage() {
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userProfile) return;
+    if (!userProfile || !userId) return;
     try {
-      const userDocRef = doc(db, "users", MOCK_USER_ID);
+      const userDocRef = doc(db, "users", userId);
       const updatedProfileData = { ...userProfile, name: editForm.name, email: editForm.email };
+      // Note: Email updates here don't update Firebase Auth email. That requires a separate process.
       await setDoc(userDocRef, updatedProfileData, { merge: true });
       setUserProfile(updatedProfileData);
       setIsEditing(false);
@@ -114,12 +131,23 @@ export default function ProfilePage() {
   ];
   
   if (isLoading) {
-    return <div className="container mx-auto py-8"><p>Carregando perfil...</p></div>;
+    return (
+        <div className="container mx-auto py-8 flex justify-center items-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="ml-2">Carregando perfil...</p>
+        </div>
+    );
   }
 
-  if (!userProfile) {
-    return <div className="container mx-auto py-8"><p>Não foi possível carregar o perfil.</p></div>;
+  if (!userProfile || !user) { // Check both userProfile from Firestore and user from Auth
+    return (
+        <div className="container mx-auto py-8">
+            <p>Não foi possível carregar o perfil. Por favor, tente fazer login novamente.</p>
+             <Button onClick={() => router.push('/login')} className="mt-4">Ir para Login</Button>
+        </div>
+    );
   }
+  // Make sure to import router if you use the button above: import { useRouter } from 'next/navigation'; const router = useRouter();
 
   return (
     <div className="container mx-auto py-8">
@@ -149,8 +177,9 @@ export default function ProfilePage() {
                     <Input id="name" value={editForm.name} onChange={(e) => setEditForm({...editForm, name: e.target.value})} />
                   </div>
                   <div>
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email">Email (informativo)</Label>
                     <Input id="email" type="email" value={editForm.email} onChange={(e) => setEditForm({...editForm, email: e.target.value})} />
+                    <p className="text-xs text-muted-foreground mt-1">Para alterar o email de login, use as opções do Firebase Auth (não implementado aqui).</p>
                   </div>
                   <div className="flex gap-2">
                     <Button type="submit">Salvar</Button>
@@ -169,8 +198,8 @@ export default function ProfilePage() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="free">Gratuito</SelectItem>
-                                <SelectItem value="pro">Pro</SelectItem>
-                                <SelectItem value="vitalicio">Vitalício</SelectItem>
+                                <SelectItem value="pro">Pro (Simular)</SelectItem>
+                                <SelectItem value="vitalicio">Vitalício (Simular)</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

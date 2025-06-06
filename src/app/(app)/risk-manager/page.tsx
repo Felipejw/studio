@@ -10,10 +10,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Landmark, Percent, Target, ShieldOff, Calculator, AlertTriangle, CheckCircle, ListCollapse } from 'lucide-react';
+import { Landmark, Percent, Target, ShieldOff, Calculator, AlertTriangle, CheckCircle, ListCollapse, Loader2 } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { db, MOCK_USER_ID, doc, getDoc, setDoc } from '@/lib/firebase';
+import { db, doc, getDoc, setDoc } from '@/lib/firebase';
+import { useAuth } from '@/components/auth-provider';
 
 const riskSettingsSchema = z.object({
   availableCapital: z.coerce.number().positive("Capital deve ser positivo."),
@@ -35,6 +36,7 @@ export default function RiskManagerPage() {
   const [currentPL, setCurrentPL] = useState(0); 
   const { toast } = useToast();
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+  const { userId, user } = useAuth();
 
   const form = useForm<RiskSettingsFormValues>({
     resolver: zodResolver(riskSettingsSchema),
@@ -48,24 +50,33 @@ export default function RiskManagerPage() {
 
   useEffect(() => {
     const fetchSettings = async () => {
+      if (!userId) {
+        setIsLoadingSettings(false);
+        form.reset({ // Reset to defaults if no user
+            availableCapital: 10000,
+            riskPerTradePercent: 1,
+            dailyProfitTarget: 200,
+            dailyLossLimit: 100,
+        });
+        setSettings(null);
+        return;
+      }
       setIsLoadingSettings(true);
       try {
-        const settingsDocRef = doc(db, "risk_config", MOCK_USER_ID); // Replace with actual user ID
+        const settingsDocRef = doc(db, "risk_config", userId);
         const docSnap = await getDoc(settingsDocRef);
         if (docSnap.exists()) {
           const loadedSettings = docSnap.data() as RiskSettings;
           setSettings(loadedSettings);
-          form.reset(loadedSettings); // Populate form with loaded settings
+          form.reset(loadedSettings); 
         } else {
-          // No settings found, use default and potentially save them for the first time
           const defaultSettings = {
             ...form.getValues(),
-            userId: MOCK_USER_ID,
+            userId: userId,
             updatedAt: new Date(),
           };
           setSettings(defaultSettings);
-          // Optionally save defaults to Firestore immediately
-          // await setDoc(settingsDocRef, defaultSettings); 
+          form.reset(defaultSettings); // Ensure form reflects defaults if no DB entry
         }
       } catch (error) {
         console.error("Error fetching risk settings:", error);
@@ -74,30 +85,34 @@ export default function RiskManagerPage() {
           title: "Erro ao Carregar Configurações",
           description: "Não foi possível buscar suas configurações de risco.",
         });
-         // Fallback to default if fetch fails
         const defaultSettingsOnError = {
             ...form.getValues(),
-            userId: MOCK_USER_ID,
+            userId: userId,
             updatedAt: new Date(),
         };
         setSettings(defaultSettingsOnError);
+        form.reset(defaultSettingsOnError);
       }
       setIsLoadingSettings(false);
     };
 
     fetchSettings();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.reset, toast]); // form.reset might change, so include it. MOCK_USER_ID is constant.
+  }, [userId, form.reset, toast]); 
 
   const onSubmit: SubmitHandler<RiskSettingsFormValues> = async (data) => {
+    if (!userId) {
+      toast({ variant: "destructive", title: "Erro de Autenticação", description: "Usuário não autenticado." });
+      return;
+    }
     try {
       const settingsToSave: RiskSettings = {
         ...data,
-        userId: MOCK_USER_ID, // Replace with actual user ID
+        userId: userId,
         updatedAt: new Date(),
       };
-      const settingsDocRef = doc(db, "risk_config", MOCK_USER_ID); // Replace with actual user ID
-      await setDoc(settingsDocRef, settingsToSave, { merge: true }); // Use merge to update or create
+      const settingsDocRef = doc(db, "risk_config", userId); 
+      await setDoc(settingsDocRef, settingsToSave, { merge: true }); 
 
       setSettings(settingsToSave);
       toast({
@@ -118,7 +133,7 @@ export default function RiskManagerPage() {
   const calculateLotSize = (stopPoints: number) => {
     if (settings && stopPoints > 0) {
       const riskAmount = (settings.availableCapital * settings.riskPerTradePercent) / 100;
-      const pointValue = 0.20; // Example for mini-índice. This should be dynamic per asset.
+      const pointValue = 0.20; 
       const lot = Math.floor(riskAmount / (stopPoints * pointValue));
       setSuggestedLotSize(lot > 0 ? lot : 1); 
     } else {
@@ -129,8 +144,15 @@ export default function RiskManagerPage() {
   const profitTargetReached = settings && currentPL >= settings.dailyProfitTarget;
   const lossLimitReached = settings && currentPL <= -settings.dailyLossLimit;
 
+  if (!user) return null; 
+
   if (isLoadingSettings) {
-    return <div className="container mx-auto py-8"><p>Carregando configurações de risco...</p></div>;
+    return (
+        <div className="container mx-auto py-8 flex justify-center items-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="ml-2">Carregando configurações de risco...</p>
+        </div>
+    );
   }
 
   return (
@@ -163,7 +185,7 @@ export default function RiskManagerPage() {
                       <FormItem><FormLabel className="flex items-center"><ShieldOff className="mr-2 h-4 w-4"/>Limite de Perda Diária (R$)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
                     )} />
                 </div>
-                <Button type="submit" className="w-full md:w-auto">Salvar Configurações</Button>
+                <Button type="submit" className="w-full md:w-auto" disabled={!userId}>Salvar Configurações</Button>
               </form>
               </Form>
             </CardContent>
@@ -182,6 +204,7 @@ export default function RiskManagerPage() {
                   type="number" 
                   placeholder="Ex: 150 (para WIN) ou 5 (para WDO)" 
                   onChange={(e) => calculateLotSize(parseFloat(e.target.value))}
+                  disabled={!settings}
                 />
               </div>
               {suggestedLotSize !== null && settings && (
@@ -205,7 +228,7 @@ export default function RiskManagerPage() {
             <CardContent className="space-y-3">
               <div className="mb-4">
                 <Label htmlFor="currentPL">Simular P/L do Dia (R$)</Label>
-                <Input id="currentPL" type="number" value={currentPL} onChange={e => setCurrentPL(parseFloat(e.target.value) || 0)} />
+                <Input id="currentPL" type="number" value={currentPL} onChange={e => setCurrentPL(parseFloat(e.target.value) || 0)} disabled={!settings} />
               </div>
               
               {!lossLimitReached && !profitTargetReached && (

@@ -14,7 +14,8 @@ import { getAiPsychologistResponse, type GetAiPsychologistResponseInput, type Ge
 import { Loader2, Sparkles, MessageSquare, Activity } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { db, MOCK_USER_ID, collection, addDoc, query, where, orderBy, getDocs } from '@/lib/firebase';
+import { db, collection, addDoc, query, where, orderBy, getDocs } from '@/lib/firebase';
+import { useAuth } from '@/components/auth-provider';
 
 const formSchema = z.object({
   feelings: z.string().min(10, { message: "Descreva seus sentimentos com pelo menos 10 caracteres." }),
@@ -27,11 +28,11 @@ interface ChatEntryFirestore {
   userId: string;
   userInput: PsychologistFormValues;
   aiResponse: GetAiPsychologistResponseOutput;
-  timestamp: Date; // Firebase Timestamp
+  timestamp: Date; 
 }
 
 interface ChatEntry extends ChatEntryFirestore {
-  id: string; // Firestore document ID
+  id: string; 
 }
 
 
@@ -40,6 +41,7 @@ export default function AiPsychologistPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const { toast } = useToast();
+  const { userId, user } = useAuth();
 
   const form = useForm<PsychologistFormValues>({
     resolver: zodResolver(formSchema),
@@ -50,11 +52,16 @@ export default function AiPsychologistPage() {
   });
 
   const fetchChatHistory = async () => {
+    if (!userId) {
+      setIsLoadingHistory(false);
+      setChatHistory([]);
+      return;
+    }
     setIsLoadingHistory(true);
     try {
       const q = query(
         collection(db, "mindset_logs"),
-        where("userId", "==", MOCK_USER_ID), // Replace with actual user ID
+        where("userId", "==", userId),
         orderBy("timestamp", "desc")
       );
       const querySnapshot = await getDocs(q);
@@ -80,17 +87,26 @@ export default function AiPsychologistPage() {
   };
 
   useEffect(() => {
-    fetchChatHistory();
+    if (userId) {
+      fetchChatHistory();
+    } else {
+      setIsLoadingHistory(false);
+      setChatHistory([]);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [userId]);
 
   const onSubmit: SubmitHandler<PsychologistFormValues> = async (data) => {
+    if (!userId) {
+      toast({ variant: "destructive", title: "Erro de Autenticação", description: "Usuário não autenticado." });
+      return;
+    }
     setIsLoading(true);
     try {
       const response = await getAiPsychologistResponse(data);
       
       const newEntryToSave: ChatEntryFirestore = {
-        userId: MOCK_USER_ID, // Replace with actual user ID
+        userId: userId,
         userInput: data,
         aiResponse: response,
         timestamp: new Date(),
@@ -102,7 +118,7 @@ export default function AiPsychologistPage() {
         description: "Sua conversa com o Psicólogo IA foi salva.",
       });
       form.reset();
-      fetchChatHistory(); // Refresh history
+      fetchChatHistory(); 
     } catch (error) {
       console.error("Error getting AI response or saving log:", error);
       toast({
@@ -113,6 +129,8 @@ export default function AiPsychologistPage() {
     }
     setIsLoading(false);
   };
+
+  if (!user) return null;
 
   return (
     <div className="container mx-auto py-8">
@@ -162,7 +180,7 @@ export default function AiPsychologistPage() {
                       </FormItem>
                     )}
                   />
-                  <Button type="submit" disabled={isLoading} className="w-full">
+                  <Button type="submit" disabled={isLoading || !userId} className="w-full">
                     {isLoading ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
@@ -184,7 +202,10 @@ export default function AiPsychologistPage() {
               </CardHeader>
               <CardContent>
                 {isLoadingHistory ? (
-                  <p>Carregando histórico...</p>
+                  <div className="flex justify-center items-center py-10">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="ml-2">Carregando histórico...</p>
+                  </div>
                 ) : chatHistory.length === 0 ? (
                   <p className="text-muted-foreground">Nenhuma conversa anterior encontrada.</p>
                 ) : (

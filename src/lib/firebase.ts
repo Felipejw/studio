@@ -12,9 +12,16 @@ import {
   setDoc, 
   getDoc, 
   updateDoc, 
-  orderBy // Ensure orderBy is imported from firebase/firestore
+  orderBy 
 } from 'firebase/firestore';
-// import { getAuth } from 'firebase/auth'; // Import when auth is needed
+import { 
+  getAuth, 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged,
+  type User
+} from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -28,15 +35,11 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
-// const auth = getAuth(app); // Initialize Auth when ready
-
-// MOCK USER ID - Replace with actual authenticated user ID
-const MOCK_USER_ID = 'mock_user_123';
+const auth = getAuth(app);
 
 export { 
   db, 
-  // auth, 
-  MOCK_USER_ID,
+  auth, 
   collection, 
   addDoc, 
   getDocs, 
@@ -46,7 +49,12 @@ export {
   setDoc,
   getDoc,
   updateDoc,
-  orderBy // Ensure orderBy is exported
+  orderBy,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  type User
 };
 
 // Note: You'll need to create a .env.local file in your project root 

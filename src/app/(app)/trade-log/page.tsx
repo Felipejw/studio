@@ -14,25 +14,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
-import { PlusCircle, Filter, ListChecks, TrendingUp, Meh, Repeat, CalendarIcon } from 'lucide-react';
+import { PlusCircle, Filter, ListChecks, TrendingUp, Meh, Repeat, CalendarIcon, Loader2 } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { db, MOCK_USER_ID, collection, addDoc, getDocs, query, where, orderBy } from '@/lib/firebase';
+import { db, collection, addDoc, getDocs, query, where, orderBy } from '@/lib/firebase';
+import { useAuth } from '@/components/auth-provider';
 
 
 interface TradeEntryFirestore extends TradeFormValues {
-  id?: string; // Firestore ID, optional for new entries
+  id?: string; 
   userId: string;
-  date: Date; // This will be a Firebase Timestamp in Firestore
+  date: Date; 
   profit: number;
 }
 
 interface TradeEntry extends TradeEntryFirestore {
-  id: string; // Firestore ID is mandatory here
+  id: string; 
 }
 
 
@@ -58,6 +59,7 @@ export default function TradeLogPage() {
   const [filterDate, setFilterDate] = useState<Date | undefined>();
   const [isLoadingTrades, setIsLoadingTrades] = useState(true);
   const { toast } = useToast();
+  const { userId, user } = useAuth();
 
   const form = useForm<TradeFormValues>({
     resolver: zodResolver(tradeSchema),
@@ -73,20 +75,20 @@ export default function TradeLogPage() {
   });
   
   const calculateProfit = (entry: number, exit: number, type: 'compra' | 'venda'): number => {
-    // Assuming 1 contract for simplicity. For WIN points, 1 point = R$0.20. For WDO, 1 point = R$10.
-    // This needs to be adaptable per asset. For this example, let's assume direct price difference for P/L.
-    // If asset is WIN, (exit - entry) * 0.20. If WDO, (exit - entry) * 10.
-    // For now, a simple difference.
     if (type === 'compra') return exit - entry;
     return entry - exit;
   };
 
   const fetchTrades = async () => {
+    if (!userId) {
+      setIsLoadingTrades(false);
+      return;
+    }
     setIsLoadingTrades(true);
     try {
       const q = query(
         collection(db, "trades"), 
-        where("userId", "==", MOCK_USER_ID), // Replace with actual user ID
+        where("userId", "==", userId),
         orderBy("date", "desc")
       );
       const querySnapshot = await getDocs(q);
@@ -96,7 +98,7 @@ export default function TradeLogPage() {
         fetchedTrades.push({ 
           ...data, 
           id: doc.id,
-          date: (data.date as any).toDate ? (data.date as any).toDate() : new Date(data.date) // Handle Firebase Timestamp
+          date: (data.date as any).toDate ? (data.date as any).toDate() : new Date(data.date)
         } as TradeEntry);
       });
       setTrades(fetchedTrades);
@@ -112,16 +114,25 @@ export default function TradeLogPage() {
   };
 
   useEffect(() => {
-    fetchTrades();
+    if (userId) {
+      fetchTrades();
+    } else {
+      setIsLoadingTrades(false); // Stop loading if no user
+      setTrades([]); // Clear trades if user logs out
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [userId]);
 
 
   const onSubmit: SubmitHandler<TradeFormValues> = async (data) => {
+    if (!userId) {
+      toast({ variant: "destructive", title: "Erro de Autenticação", description: "Usuário não autenticado." });
+      return;
+    }
     try {
       const tradeToSave: TradeEntryFirestore = {
         ...data,
-        userId: MOCK_USER_ID, // Replace with actual user ID
+        userId: userId,
         date: new Date(),
         profit: calculateProfit(data.entryPrice, data.exitPrice, data.type),
       };
@@ -132,7 +143,7 @@ export default function TradeLogPage() {
       });
       form.reset();
       setIsDialogOpen(false);
-      fetchTrades(); // Refresh the list
+      fetchTrades(); 
     } catch (error) {
       console.error("Error saving trade:", error);
       toast({
@@ -152,13 +163,15 @@ export default function TradeLogPage() {
     return filteredTrades.reduce((acc, trade) => acc + trade.profit, 0);
   }, [filteredTrades]);
 
+  if (!user) return null;
+
   return (
     <div className="container mx-auto py-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold font-headline">Diário de Operações</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button disabled={!userId}>
               <PlusCircle className="mr-2 h-4 w-4" /> Novo Trade
             </Button>
           </DialogTrigger>
@@ -311,7 +324,10 @@ export default function TradeLogPage() {
         </CardHeader>
         <CardContent>
           {isLoadingTrades ? (
-            <p>Carregando trades...</p>
+            <div className="flex justify-center items-center py-10">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="ml-2">Carregando trades...</p>
+            </div>
           ) : (
             <Table>
               <TableHeader>

@@ -16,7 +16,8 @@ import { generateDailyPlan, type GenerateDailyPlanInput, type GenerateDailyPlanO
 import { Loader2, Wand2 } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { db, MOCK_USER_ID, collection, addDoc } from '@/lib/firebase';
+import { db, collection, addDoc } from '@/lib/firebase';
+import { useAuth } from '@/components/auth-provider';
 
 const setupsOptions = [
   { id: 'scalping', label: 'Scalping' },
@@ -41,6 +42,7 @@ export default function DailyPlanPage() {
   const [aiResponse, setAiResponse] = useState<GenerateDailyPlanOutput | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const { userId, user } = useAuth();
 
   const form = useForm<DailyPlanFormValues>({
     resolver: zodResolver(formSchema),
@@ -55,6 +57,10 @@ export default function DailyPlanPage() {
   });
 
   const onSubmit: SubmitHandler<DailyPlanFormValues> = async (data) => {
+    if (!userId) {
+      toast({ variant: "destructive", title: "Erro de Autenticação", description: "Usuário não autenticado." });
+      return;
+    }
     setIsLoading(true);
     setAiResponse(null);
     try {
@@ -65,7 +71,7 @@ export default function DailyPlanPage() {
       await addDoc(collection(db, "trading_plans"), {
         ...data,
         aiGeneratedPlan: response,
-        userId: MOCK_USER_ID, // Replace with actual user ID after auth
+        userId: userId,
         createdAt: new Date(),
       });
 
@@ -84,6 +90,8 @@ export default function DailyPlanPage() {
     }
     setIsLoading(false);
   };
+  
+  if (!user) return null; // Or a loading/auth check component
 
   return (
     <div className="container mx-auto py-8">
@@ -245,7 +253,7 @@ export default function DailyPlanPage() {
                   )}
                 />
                 
-                <Button type="submit" disabled={isLoading} className="w-full">
+                <Button type="submit" disabled={isLoading || !userId} className="w-full">
                   {isLoading ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (

@@ -1,9 +1,10 @@
+
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { navItems, type NavItem } from '@/config/nav';
+import { navItems } from '@/config/nav';
 import {
   Sidebar,
   SidebarHeader,
@@ -15,9 +16,33 @@ import {
 } from '@/components/ui/sidebar';
 import { LeafIcon, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { auth, signOut as firebaseSignOut } from '@/lib/firebase'; // Renamed signOut to firebaseSignOut
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/components/auth-provider';
+
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { toast } = useToast();
+  const { setOpenMobile } = useSidebar(); // Assuming useSidebar is correctly imported and provides this
+  const { user } = useAuth();
+
+
+  const handleSignOut = async () => {
+    try {
+      await firebaseSignOut(auth);
+      toast({ title: 'Logout Realizado', description: 'Você foi desconectado com sucesso.' });
+      if (typeof setOpenMobile === 'function') {
+         setOpenMobile(false); // Close mobile sidebar if open
+      }
+      router.push('/login');
+    } catch (error) {
+      console.error('Sign out error:', error);
+      toast({ variant: 'destructive', title: 'Erro no Logout', description: 'Não foi possível fazer logout.' });
+    }
+  };
+
 
   return (
     <Sidebar side="left" variant="sidebar" collapsible="icon">
@@ -42,6 +67,11 @@ export function AppSidebar() {
                   isActive={pathname === item.href}
                   tooltip={item.title}
                   aria-label={item.title}
+                  onClick={() => {
+                     if (typeof setOpenMobile === 'function' && user) { // Only close if user is logged in and on mobile
+                        setOpenMobile(false);
+                     }
+                  }}
                 >
                   <item.icon className="h-5 w-5" />
                   <span className="group-data-[collapsible=icon]:hidden">
@@ -55,7 +85,12 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="p-2">
-        <Button variant="ghost" className="w-full justify-start gap-2 group-data-[collapsible=icon]:justify-center">
+        <Button 
+            variant="ghost" 
+            className="w-full justify-start gap-2 group-data-[collapsible=icon]:justify-center"
+            onClick={handleSignOut}
+            disabled={!user} // Disable if no user
+        >
            <LogOut className="h-5 w-5" />
            <span className="group-data-[collapsible=icon]:hidden">Sair</span>
         </Button>
@@ -63,3 +98,13 @@ export function AppSidebar() {
     </Sidebar>
   );
 }
+
+// Added dummy useSidebar hook if not present from ui/sidebar
+const SidebarContext = React.createContext<{ setOpenMobile?: (open: boolean) => void } | null>(null);
+const useSidebar = () => {
+    const context = React.useContext(SidebarContext);
+    // Provide a default no-op function if context is not found or setOpenMobile is not defined
+    return { setOpenMobile: context?.setOpenMobile || (() => {}) }; 
+};
+import React from 'react'; // Ensure React is imported for context
+
