@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { navItems } from '@/config/nav';
+import { navItems } from '@/config/nav'; // Regular nav items
 import {
   Sidebar,
   SidebarHeader,
@@ -13,30 +13,40 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarFooter,
-  useSidebar as useUiSidebar, 
+  useSidebar as useUiSidebar,
 } from '@/components/ui/sidebar';
-import { LeafIcon, LogOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react'; // Added PanelLeftClose, PanelLeftOpen
+import { LeafIcon, LogOut, PanelLeftClose, PanelLeftOpen, Users } from 'lucide-react'; // Changed icon to Users
 import { Button } from '@/components/ui/button';
-import { auth, signOut as firebaseSignOut } from '@/lib/firebase'; 
+import { auth, signOut as firebaseSignOut } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/components/auth-provider';
 import React from 'react';
 
+// Define admin nav item separately for clarity
+const adminNavItem = {
+  title: 'Admin Usuários',
+  href: '/admin/users',
+  icon: Users, // Using Users icon
+  label: 'Gerenciar Usuários',
+};
 
 export function AppSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { toast } = useToast();
-  const { setOpenMobile, toggleSidebar, state: sidebarState, isMobile } = useUiSidebar(); 
-  const { user } = useAuth();
+  const { setOpenMobile, toggleSidebar, state: sidebarState, isMobile } = useUiSidebar();
+  const { user, loading: authLoading } = useAuth(); // Get loading state from auth
 
+  // Determine if the current user is admin
+  // Important: Check for authLoading to ensure user object is populated
+  const isAdmin = !authLoading && user && user.email === 'felipejw.fm@gmail.com';
 
   const handleSignOut = async () => {
     try {
       await firebaseSignOut(auth);
       toast({ title: 'Logout Realizado', description: 'Você foi desconectado com sucesso.' });
       if (typeof setOpenMobile === 'function') {
-         setOpenMobile(false); 
+         setOpenMobile(false);
       }
       router.push('/login');
     } catch (error) {
@@ -45,11 +55,10 @@ export function AppSidebar() {
     }
   };
 
-
   return (
-    <Sidebar 
-        side="left" 
-        variant="sidebar" 
+    <Sidebar
+        side="left"
+        variant="sidebar"
         collapsible="icon"
         className="border-r border-sidebar-border shadow-md"
     >
@@ -72,8 +81,8 @@ export function AppSidebar() {
                   size="default"
                   className={cn(
                     "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                    pathname === item.href 
-                      ? 'bg-sidebar-primary text-sidebar-primary-foreground font-semibold shadow-sm' 
+                    pathname === item.href
+                      ? 'bg-sidebar-primary text-sidebar-primary-foreground font-semibold shadow-sm'
                       : 'text-sidebar-foreground/80 hover:text-sidebar-accent-foreground'
                   )}
                   isActive={pathname === item.href}
@@ -83,7 +92,7 @@ export function AppSidebar() {
                   }}
                   aria-label={item.title}
                   onClick={() => {
-                     if (typeof setOpenMobile === 'function' && user) { 
+                     if (typeof setOpenMobile === 'function' && user) {
                         setOpenMobile(false);
                      }
                   }}
@@ -96,6 +105,39 @@ export function AppSidebar() {
               </Link>
             </SidebarMenuItem>
           ))}
+          {/* Conditional rendering for Admin Nav Item, ensuring auth is not loading */}
+          {isAdmin && (
+            <SidebarMenuItem key={adminNavItem.href} className="px-2">
+              <Link href={adminNavItem.href} passHref legacyBehavior>
+                <SidebarMenuButton
+                  variant="default"
+                  size="default"
+                  className={cn(
+                    "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                    pathname === adminNavItem.href
+                      ? 'bg-sidebar-primary text-sidebar-primary-foreground font-semibold shadow-sm'
+                      : 'text-sidebar-foreground/80 hover:text-sidebar-accent-foreground'
+                  )}
+                  isActive={pathname === adminNavItem.href}
+                  tooltip={{
+                    children: adminNavItem.title,
+                    className: "bg-sidebar-background text-sidebar-foreground border-sidebar-border"
+                  }}
+                  aria-label={adminNavItem.title}
+                   onClick={() => {
+                     if (typeof setOpenMobile === 'function' && user) { // Check user for safety, though isAdmin implies user exists
+                        setOpenMobile(false);
+                     }
+                  }}
+                >
+                  <adminNavItem.icon className="h-5 w-5" />
+                  <span className="group-data-[collapsible=icon]:hidden">
+                    {adminNavItem.title}
+                  </span>
+                </SidebarMenuButton>
+              </Link>
+            </SidebarMenuItem>
+          )}
         </SidebarMenu>
       </SidebarContent>
 
@@ -117,11 +159,11 @@ export function AppSidebar() {
             </span>
           </Button>
         )}
-        <Button 
-            variant="ghost" 
+        <Button
+            variant="ghost"
             className="w-full justify-start gap-2 group-data-[collapsible=icon]:justify-center text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             onClick={handleSignOut}
-            disabled={!user} 
+            disabled={!user || authLoading} // Disable if no user or auth is loading
              tooltip={{
                 children: "Sair",
                 className: "bg-sidebar-background text-sidebar-foreground border-sidebar-border group-data-[collapsible=icon]:block hidden"
