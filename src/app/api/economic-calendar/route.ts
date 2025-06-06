@@ -6,7 +6,7 @@ interface FinnhubEconomicEvent {
   country: string; // e.g., "US", "DE", "BR"
   estimate?: number | null;
   event: string; // Description of the event
-  impact?: string | null; // Finnhub API docs mention impact as string, but it can be number too.
+  impact?: string | number | null; // Finnhub API docs mention impact as string, but it can be number too.
                            // Example values: "Low", "Medium", "High", or sometimes numbers like 0, 1, 2.
   prev?: number | null;
   time: string; // e.g., "2024-07-26 12:30:00" (UTC time typically)
@@ -17,11 +17,11 @@ interface FinnhubEconomicEvent {
 export async function GET() {
   const apiKey = process.env.NEXT_PUBLIC_FINNHUB_API_KEY;
 
-  // Server-side log to check if API key is loaded
-  if (process.env.NODE_ENV === 'development') { // Log only in development
+  // Enhanced server-side log
+  if (process.env.NODE_ENV === 'development') {
+    const maskedKey = apiKey ? `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}` : 'API Key is UNDEFINED';
     console.log(
-      '[API Route /api/economic-calendar] Attempting to use Finnhub API Key:',
-      apiKey ? `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}` : 'API Key is UNDEFINED in .env'
+      `[API Route /api/economic-calendar] Attempting to use Finnhub API Key: ${maskedKey} (Length: ${apiKey?.length || 0})`
     );
   }
 
@@ -38,27 +38,33 @@ export async function GET() {
   const toDate = nextWeek.toISOString().split('T')[0];
 
   const url = `https://finnhub.io/api/v1/calendar/economic?from=${fromDate}&to=${toDate}&token=${apiKey}`;
+  
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[API Route /api/economic-calendar] Fetching URL: ${url.replace(apiKey, '***MASKED_API_KEY***')}`);
+  }
 
   try {
     const response = await fetch(url);
+    
     if (!response.ok) {
-      const errorBodyText = await response.text(); // Read body as text first
+      const errorBodyText = await response.text(); 
       let finnhubErrorMessage = `Failed to fetch economic calendar: ${response.statusText} (Status: ${response.status})`;
       let errorDetails = errorBodyText;
 
+      console.error(`[API Route /api/economic-calendar] Finnhub API error: Status: ${response.status}, StatusText: ${response.statusText}. Response body: ${errorBodyText}`);
+      
       try {
-        const parsedError = JSON.parse(errorBodyText); // Try to parse as JSON
+        const parsedError = JSON.parse(errorBodyText); 
         if (parsedError && parsedError.error) {
           finnhubErrorMessage = parsedError.error;
         }
       } catch (e) {
-        // If parsing fails, errorBodyText is likely not JSON, use it directly or part of it
-        if (errorBodyText.length > 150) { // Avoid overly long plain text errors
-            errorDetails = errorBodyText.substring(0,150) + "...";
+        // If parsing fails, errorBodyText is likely not JSON
+         if (errorBodyText.length > 200) { 
+            errorDetails = errorBodyText.substring(0,200) + "...";
         }
       }
       
-      console.error(`[API Route /api/economic-calendar] Finnhub API error: ${response.status} ${response.statusText}. Response body: ${errorBodyText}`);
       return NextResponse.json({ error: finnhubErrorMessage, details: errorDetails, finnhubStatus: response.status }, { status: response.status });
     }
     
