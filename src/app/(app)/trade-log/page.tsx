@@ -105,6 +105,7 @@ export default function TradeLogPage() {
       setTrades([]);
       return;
     }
+    console.log("Attempting to fetch trades for userId:", userId); // Log para verificar o userId
     setIsLoadingTrades(true);
     try {
       const q = query(
@@ -116,7 +117,6 @@ export default function TradeLogPage() {
       const fetchedTrades: TradeEntry[] = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data() as TradeEntryFirestore;
-        // Basic check if data.date is a Firestore Timestamp
         if (data.date && typeof data.date.toDate === 'function') {
           fetchedTrades.push({ 
             ...data, 
@@ -124,20 +124,26 @@ export default function TradeLogPage() {
             date: data.date.toDate() 
           } as TradeEntry);
         } else {
-          console.warn(`Document ${doc.id} has an invalid date field:`, data.date);
+          console.warn(`Document ${doc.id} has an invalid or missing 'date' field that is not a Firestore Timestamp. Data:`, data);
         }
       });
       setTrades(fetchedTrades);
     } catch (error: any) {
       console.error("Erro DETALHADO ao CARREGAR trades (objeto completo):", error);
+      if (error.message) {
+        console.error("Mensagem de erro (carregar trades):", error.message);
+      }
+      if (error.code) {
+        console.error("Código do erro (carregar trades):", error.code);
+      }
       if (error.stack) {
         console.error("Stack do erro (carregar trades):", error.stack);
       }
       toast({
         variant: "destructive",
         title: "Erro ao Carregar Trades",
-        description: `Não foi possível buscar seus trades registrados. ${error?.message || String(error) ||  'Erro desconhecido'}. Verifique o console.`,
-        duration: 7000,
+        description: `Não foi possível buscar seus trades. Cód: ${error.code || 'Desconhecido'}. Msg: ${error.message || String(error)}. Verifique o console.`,
+        duration: 9000,
       });
     }
     setIsLoadingTrades(false);
@@ -201,14 +207,20 @@ export default function TradeLogPage() {
       fetchTrades(); 
     } catch (error: any) {
       console.error("Erro DETALHADO ao SALVAR trade (objeto completo):", error);
+      if (error.message) {
+        console.error("Mensagem de erro (salvar trade):", error.message);
+      }
+      if (error.code) {
+        console.error("Código do erro (salvar trade):", error.code);
+      }
       if (error.stack) {
         console.error("Stack do erro (salvar trade):", error.stack);
       }
       toast({
         variant: "destructive",
         title: "Erro ao Salvar Trade",
-        description: `Não foi possível registrar sua operação. ${error?.message || String(error) ||  'Erro desconhecido'}. Verifique o console para mais detalhes.`,
-        duration: 7000,
+        description: `Não foi possível registrar sua operação. Cód: ${error.code || 'Desconhecido'}. Msg: ${error.message || String(error)}. Verifique o console.`,
+        duration: 9000,
       });
     }
   };
@@ -547,5 +559,3 @@ export default function TradeLogPage() {
     </div>
   );
 }
-
-    
