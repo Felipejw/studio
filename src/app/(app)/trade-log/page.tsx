@@ -105,7 +105,7 @@ export default function TradeLogPage() {
       setTrades([]);
       return;
     }
-    console.log("Attempting to fetch trades for userId:", userId); // Log para verificar o userId
+    console.log("Attempting to fetch trades for userId:", userId); 
     setIsLoadingTrades(true);
     try {
       const q = query(
@@ -116,13 +116,14 @@ export default function TradeLogPage() {
       const querySnapshot = await getDocs(q);
       const fetchedTrades: TradeEntry[] = [];
       querySnapshot.forEach((doc) => {
-        const data = doc.data() as TradeEntryFirestore;
-        if (data.date && typeof data.date.toDate === 'function') {
+        const data = doc.data() as Partial<TradeEntryFirestore>; // Use Partial for safer access
+        // Check if data.date exists and is a Firestore Timestamp
+        if (data.date && typeof (data.date as any).toDate === 'function') {
           fetchedTrades.push({ 
-            ...data, 
+            ...(data as TradeEntryFirestore), // Cast back to full type after check
             id: doc.id,
-            date: data.date.toDate() 
-          } as TradeEntry);
+            date: (data.date as Timestamp).toDate() 
+          } as TradeEntry); // Ensure final object matches TradeEntry
         } else {
           console.warn(`Document ${doc.id} has an invalid or missing 'date' field that is not a Firestore Timestamp. Data:`, data);
         }
@@ -130,6 +131,19 @@ export default function TradeLogPage() {
       setTrades(fetchedTrades);
     } catch (error: any) {
       console.error("Erro DETALHADO ao CARREGAR trades (objeto completo):", error);
+      let description = `Não foi possível buscar seus trades. Verifique o console para detalhes.`;
+      if (error.message && error.message.includes("firestore/failed-precondition") && error.message.includes("index")) {
+        description = `O Firestore requer um índice para esta consulta. Verifique o CONSOLE do navegador para o LINK para criar o índice. Cód: ${error.code || 'failed-precondition'}`;
+      } else if (error.code) {
+         description = `Não foi possível buscar seus trades. Cód: ${error.code}. Msg: ${error.message || String(error)}. Verifique o console.`;
+      }
+      
+      toast({
+        variant: "destructive",
+        title: "Erro ao Carregar Trades",
+        description: description,
+        duration: 15000, // Longer duration for index creation link
+      });
       if (error.message) {
         console.error("Mensagem de erro (carregar trades):", error.message);
       }
@@ -139,12 +153,6 @@ export default function TradeLogPage() {
       if (error.stack) {
         console.error("Stack do erro (carregar trades):", error.stack);
       }
-      toast({
-        variant: "destructive",
-        title: "Erro ao Carregar Trades",
-        description: `Não foi possível buscar seus trades. Cód: ${error.code || 'Desconhecido'}. Msg: ${error.message || String(error)}. Verifique o console.`,
-        duration: 9000,
-      });
     }
     setIsLoadingTrades(false);
   };
@@ -559,3 +567,4 @@ export default function TradeLogPage() {
     </div>
   );
 }
+
