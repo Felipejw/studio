@@ -2,16 +2,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation'; // Import useRouter
+import { useRouter } from 'next/navigation'; 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { UserCircle, CreditCard, Settings, History, Download, Star, BarChartHorizontalBig, Edit, Loader2 } from 'lucide-react';
+import { UserCircle, CreditCard, Settings, History, Download, Star, BarChartHorizontalBig, Edit, Loader2, Phone, Fingerprint } from 'lucide-react';
 import Image from 'next/image';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { db, doc, getDoc, setDoc, Timestamp } from '@/lib/firebase'; // Added Timestamp
+import { db, doc, getDoc, setDoc, Timestamp } from '@/lib/firebase'; 
 import { useAuth } from '@/components/auth-provider';
 
 type UserPlan = 'free' | 'pro' | 'vitalicio';
@@ -20,14 +20,18 @@ interface UserProfileDataFirestore {
   uid: string;
   name: string;
   email: string;
+  whatsapp?: string;
+  cpf?: string;
   plan: UserPlan;
-  memberSince: Timestamp; // Changed to Firestore Timestamp
-  lastPayment?: Timestamp; // Changed to Firestore Timestamp
+  memberSince: Timestamp; 
+  lastPayment?: Timestamp; 
 }
 
 interface UserProfileData extends Omit<UserProfileDataFirestore, 'memberSince' | 'lastPayment'> {
-  memberSince: string; // Keep as string for client-side display
-  lastPayment?: string; // Keep as string for client-side display
+  memberSince: string; 
+  lastPayment?: string; 
+  whatsapp?: string;
+  cpf?: string;
 }
 
 
@@ -43,11 +47,11 @@ export default function ProfilePage() {
   const [userProfile, setUserProfile] = useState<UserProfileData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState({ name: '', email: '' });
+  const [editForm, setEditForm] = useState({ name: '', email: '', whatsapp: '', cpf: '' });
 
   const { toast } = useToast();
   const { user, userId } = useAuth();
-  const router = useRouter(); // Initialize useRouter
+  const router = useRouter(); 
 
   const currentLevel = consistencyLevels[2]; 
 
@@ -67,14 +71,18 @@ export default function ProfilePage() {
             ...data,
             memberSince: data.memberSince.toDate().toISOString(),
             lastPayment: data.lastPayment?.toDate().toISOString(),
+            whatsapp: data.whatsapp || '',
+            cpf: data.cpf || '',
         });
-        setEditForm({ name: data.name, email: data.email });
+        setEditForm({ name: data.name, email: data.email, whatsapp: data.whatsapp || '', cpf: data.cpf || '' });
       } else {
-        if (user) { // Check if auth user object exists
+        if (user) { 
             const defaultProfileFirestore: UserProfileDataFirestore = {
               uid: user.uid,
               name: user.displayName || 'Novo Usuário',
               email: user.email || 'email@desconhecido.com',
+              whatsapp: '',
+              cpf: '',
               plan: 'free',
               memberSince: Timestamp.fromDate(new Date()),
             };
@@ -82,8 +90,10 @@ export default function ProfilePage() {
             setUserProfile({
                 ...defaultProfileFirestore,
                 memberSince: defaultProfileFirestore.memberSince.toDate().toISOString(),
+                whatsapp: defaultProfileFirestore.whatsapp,
+                cpf: defaultProfileFirestore.cpf,
             });
-            setEditForm({ name: defaultProfileFirestore.name, email: defaultProfileFirestore.email });
+            setEditForm({ name: defaultProfileFirestore.name, email: defaultProfileFirestore.email, whatsapp: defaultProfileFirestore.whatsapp || '', cpf: defaultProfileFirestore.cpf || ''});
             toast({ title: "Perfil Criado", description: "Seu perfil inicial foi configurado." });
         } else {
              setUserProfile(null); 
@@ -100,14 +110,13 @@ export default function ProfilePage() {
   useEffect(() => {
     fetchUserProfile();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]); // Depend only on userId
+  }, [userId]); 
 
   const handlePlanChange = async (newPlan: UserPlan) => {
     if (!userProfile || !userId) return;
-    setIsLoading(true); // Indicate loading state
+    setIsLoading(true); 
     try {
       const userDocRef = doc(db, "users", userId);
-      // Fetch current profile again to ensure we have the latest Firestore Timestamps
       const currentDocSnap = await getDoc(userDocRef);
       if (!currentDocSnap.exists()) {
         toast({ variant: "destructive", title: "Erro", description: "Perfil não encontrado para atualizar plano." });
@@ -118,14 +127,14 @@ export default function ProfilePage() {
       const updatedProfileFirestore: UserProfileDataFirestore = { 
         ...currentData, 
         plan: newPlan,
-        // Potentially update lastPayment if this action implies a payment
-        // lastPayment: newPlan !== 'free' ? Timestamp.fromDate(new Date()) : currentData.lastPayment,
       };
       await setDoc(userDocRef, updatedProfileFirestore, { merge: true });
       setUserProfile({
         ...updatedProfileFirestore,
         memberSince: updatedProfileFirestore.memberSince.toDate().toISOString(),
         lastPayment: updatedProfileFirestore.lastPayment?.toDate().toISOString(),
+        whatsapp: updatedProfileFirestore.whatsapp || '',
+        cpf: updatedProfileFirestore.cpf || '',
       });
       toast({
         title: "Plano Atualizado!",
@@ -155,13 +164,17 @@ export default function ProfilePage() {
       const updatedProfileDataFirestore: UserProfileDataFirestore = { 
         ...currentData, 
         name: editForm.name, 
-        email: editForm.email // Note: Email updates here don't update Firebase Auth email.
+        email: editForm.email, 
+        whatsapp: editForm.whatsapp || '',
+        cpf: editForm.cpf || '',
       };
       await setDoc(userDocRef, updatedProfileDataFirestore, { merge: true });
       setUserProfile({
         ...updatedProfileDataFirestore,
         memberSince: updatedProfileDataFirestore.memberSince.toDate().toISOString(),
         lastPayment: updatedProfileDataFirestore.lastPayment?.toDate().toISOString(),
+        whatsapp: updatedProfileDataFirestore.whatsapp || '',
+        cpf: updatedProfileDataFirestore.cpf || '',
       });
       setIsEditing(false);
       toast({ title: "Perfil Atualizado", description: "Suas informações foram salvas." });
@@ -178,7 +191,7 @@ export default function ProfilePage() {
     { id: 3, date: '19/07/2024', action: 'Sessão com Psicólogo Virtual' },
   ];
   
-  if (isLoading && !userProfile) { // Show loader only if profile is not yet loaded
+  if (isLoading && !userProfile) { 
     return (
         <div className="container mx-auto py-8 flex justify-center items-center h-[calc(100vh-200px)]">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -187,7 +200,7 @@ export default function ProfilePage() {
     );
   }
 
-  if (!userProfile && !isLoading) { // If done loading and still no profile
+  if (!userProfile && !isLoading) { 
     return (
         <div className="container mx-auto py-8 text-center">
             <p className="mb-4">Não foi possível carregar o perfil. Por favor, tente recarregar a página ou fazer login novamente.</p>
@@ -196,7 +209,7 @@ export default function ProfilePage() {
     );
   }
   
-  if (!userProfile) return null; // Should not be reached if above conditions are met
+  if (!userProfile) return null; 
 
   return (
     <div className="container mx-auto py-8">
@@ -228,18 +241,34 @@ export default function ProfilePage() {
                   <div>
                     <Label htmlFor="email">Email (informativo)</Label>
                     <Input id="email" type="email" value={editForm.email} onChange={(e) => setEditForm({...editForm, email: e.target.value})} />
-                    <p className="text-xs text-muted-foreground mt-1">Para alterar o email de login, use as opções do Firebase Auth (não implementado aqui).</p>
+                    <p className="text-xs text-muted-foreground mt-1">Para alterar o email de login, use as opções do Firebase Auth.</p>
+                  </div>
+                  <div>
+                    <Label htmlFor="whatsapp">WhatsApp</Label>
+                    <Input id="whatsapp" type="tel" placeholder="(XX) XXXXX-XXXX" value={editForm.whatsapp} onChange={(e) => setEditForm({...editForm, whatsapp: e.target.value})} />
+                  </div>
+                  <div>
+                    <Label htmlFor="cpf">CPF</Label>
+                    <Input id="cpf" placeholder="XXX.XXX.XXX-XX" value={editForm.cpf} onChange={(e) => setEditForm({...editForm, cpf: e.target.value})} />
                   </div>
                   <div className="flex gap-2">
                     <Button type="submit" disabled={isLoading}>
                         {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Salvar
                     </Button>
-                    <Button type="button" variant="ghost" onClick={() => {setIsEditing(false); setEditForm({name: userProfile.name, email: userProfile.email});}} disabled={isLoading}>Cancelar</Button>
+                    <Button type="button" variant="ghost" onClick={() => {setIsEditing(false); setEditForm({name: userProfile.name, email: userProfile.email, whatsapp: userProfile.whatsapp || '', cpf: userProfile.cpf || ''});}} disabled={isLoading}>Cancelar</Button>
                   </div>
                 </form>
               ) : (
-                <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground flex items-center"><Phone className="mr-2 h-4 w-4" />WhatsApp</p>
+                    <p>{userProfile.whatsapp || 'Não informado'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground flex items-center"><Fingerprint className="mr-2 h-4 w-4" />CPF</p>
+                    <p>{userProfile.cpf || 'Não informado'}</p>
+                  </div>
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Plano Atual</p>
                     <div className="flex items-center gap-2">
@@ -267,10 +296,10 @@ export default function ProfilePage() {
                     <p className="text-sm font-medium text-muted-foreground">Membro Desde</p>
                     <p>{new Date(userProfile.memberSince).toLocaleDateString('pt-BR')}</p>
                   </div>
-                  <Button variant="outline" className="w-full sm:w-auto" disabled>
+                  <Button variant="outline" className="w-full sm:w-auto sm:col-span-2" disabled>
                     <CreditCard className="mr-2 h-4 w-4" /> Gerenciar Assinatura (Em breve)
                   </Button>
-                </>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -299,7 +328,7 @@ export default function ProfilePage() {
               <CardTitle className="font-headline flex items-center"><BarChartHorizontalBig className="mr-2 h-5 w-5"/>Progresso de Consistência</CardTitle>
             </CardHeader>
             <CardContent className="text-center">
-                <Image src={`https://placehold.co/100x100.png`} alt="Ícone do Nível" width={80} height={80} className="mx-auto mb-2 rounded-full bg-primary/20 p-2" data-ai-hint={`${currentLevel.iconHint} achievement`}/>
+                <Image src="https://placehold.co/100x100.png" alt="Ícone do Nível" width={80} height={80} className="mx-auto mb-2 rounded-full bg-primary/20 p-2" data-ai-hint={`${currentLevel.iconHint} achievement`}/>
                 <p className="text-xl font-semibold">{currentLevel.name}</p>
                 <div className="flex justify-center my-1">
                     {Array.from({ length: 5 }).map((_, i) => (

@@ -11,14 +11,16 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { createUserWithEmailAndPassword, auth, setDoc, doc, db } from '@/lib/firebase';
+import { createUserWithEmailAndPassword, auth, setDoc, doc, db, Timestamp } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { LeafIcon, Loader2 } from 'lucide-react';
 
 const signupSchema = z.object({
+  name: z.string().min(2, {message: "Nome é obrigatório (mínimo 2 caracteres)."}),
   email: z.string().email({ message: 'Email inválido.' }),
   password: z.string().min(6, { message: 'Senha deve ter pelo menos 6 caracteres.' }),
-  name: z.string().min(2, {message: "Nome é obrigatório."})
+  whatsapp: z.string().min(10, {message: "WhatsApp deve ter pelo menos 10 dígitos."}).optional().or(z.literal('')), // Ex: (XX) XXXXX-XXXX
+  cpf: z.string().min(11, {message: "CPF deve ter 11 dígitos."}).optional().or(z.literal('')), // Ex: XXX.XXX.XXX-XX
 });
 
 type SignupFormValues = z.infer<typeof signupSchema>;
@@ -34,6 +36,8 @@ export default function SignupPage() {
       name: '',
       email: '',
       password: '',
+      whatsapp: '',
+      cpf: '',
     },
   });
 
@@ -48,8 +52,10 @@ export default function SignupPage() {
         uid: user.uid,
         email: user.email,
         name: data.name,
+        whatsapp: data.whatsapp || '',
+        cpf: data.cpf || '',
         plan: 'free', // Default plan
-        memberSince: new Date().toISOString(),
+        memberSince: Timestamp.fromDate(new Date()), // Use Firestore Timestamp
       });
 
       toast({ title: 'Cadastro realizado!', description: 'Sua conta foi criada. Redirecionando...' });
@@ -78,7 +84,7 @@ export default function SignupPage() {
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4"> {/* Reduced space-y for more compact form */}
              <FormField
                 control={form.control}
                 name="name"
@@ -86,7 +92,7 @@ export default function SignupPage() {
                   <FormItem>
                     <FormLabel>Nome Completo</FormLabel>
                     <FormControl>
-                      <Input placeholder="Seu nome" {...field} />
+                      <Input placeholder="Seu nome completo" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -112,7 +118,33 @@ export default function SignupPage() {
                   <FormItem>
                     <FormLabel>Senha</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="Crie uma senha forte" {...field} />
+                      <Input type="password" placeholder="Crie uma senha forte (mín. 6 caracteres)" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+               <FormField
+                control={form.control}
+                name="whatsapp"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>WhatsApp (Opcional)</FormLabel>
+                    <FormControl>
+                      <Input type="tel" placeholder="(XX) XXXXX-XXXX" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+               <FormField
+                control={form.control}
+                name="cpf"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>CPF (Opcional)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="XXX.XXX.XXX-XX" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

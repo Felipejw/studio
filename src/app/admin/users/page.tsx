@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Loader2, ShieldAlert, Users, ArrowLeft } from 'lucide-react';
+import { Loader2, ShieldAlert, Users, ArrowLeft, Phone, Fingerprint } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 
@@ -20,15 +20,19 @@ interface UserProfileDataFirestore {
   uid: string;
   name: string;
   email: string;
+  whatsapp?: string;
+  cpf?: string;
   plan: UserPlan;
-  memberSince: Timestamp | string; // Allow string for initial fetch if not Timestamp
+  memberSince: Timestamp | string; 
   lastPayment?: Timestamp | string;
 }
 
 interface UserProfileAdminView extends Omit<UserProfileDataFirestore, 'memberSince' | 'lastPayment'> {
-  id: string; // This will be the Firestore document ID
-  memberSince: string; // For display
-  lastPayment?: string; // For display
+  id: string; 
+  memberSince: string; 
+  lastPayment?: string; 
+  whatsapp?: string;
+  cpf?: string;
 }
 
 export default function AdminUsersPage() {
@@ -36,10 +40,9 @@ export default function AdminUsersPage() {
   const router = useRouter();
   const [usersList, setUsersList] = useState<UserProfileAdminView[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
-  const [isUpdatingPlan, setIsUpdatingPlan] = useState<string | null>(null); // Store UID of user being updated
+  const [isUpdatingPlan, setIsUpdatingPlan] = useState<string | null>(null); 
   const { toast } = useToast();
 
-  // Authorization check
   useEffect(() => {
     if (!authLoading) {
       if (!user || user.email !== 'felipejw.fm@gmail.com') {
@@ -49,9 +52,7 @@ export default function AdminUsersPage() {
     }
   }, [user, authLoading, router, toast]);
 
-  // Fetch users
   useEffect(() => {
-    // Ensure this effect runs only when the admin user is confirmed
     if (user && user.email === 'felipejw.fm@gmail.com') {
       const fetchUsers = async () => {
         setIsLoadingUsers(true);
@@ -62,10 +63,12 @@ export default function AdminUsersPage() {
           querySnapshot.forEach((docSnap) => {
             const data = docSnap.data() as UserProfileDataFirestore;
             fetchedUsers.push({
-              ...data, // Spread all fields from UserProfileDataFirestore
-              id: docSnap.id, // Use Firestore document ID for the 'id' field
+              ...data, 
+              id: docSnap.id, 
               memberSince: data.memberSince instanceof Timestamp ? data.memberSince.toDate().toLocaleDateString('pt-BR') : String(data.memberSince),
               lastPayment: data.lastPayment ? (data.lastPayment instanceof Timestamp ? data.lastPayment.toDate().toLocaleDateString('pt-BR') : String(data.lastPayment)) : 'N/A',
+              whatsapp: data.whatsapp || 'N/A',
+              cpf: data.cpf || 'N/A',
             });
           });
           setUsersList(fetchedUsers);
@@ -145,6 +148,8 @@ export default function AdminUsersPage() {
                     <TableRow>
                       <TableHead>Nome</TableHead>
                       <TableHead>Email</TableHead>
+                      <TableHead><Phone className="inline mr-1 h-4 w-4"/>WhatsApp</TableHead>
+                      <TableHead><Fingerprint className="inline mr-1 h-4 w-4"/>CPF</TableHead>
                       <TableHead>Plano Atual</TableHead>
                       <TableHead>Membro Desde</TableHead>
                       <TableHead>Último Pagamento</TableHead>
@@ -156,6 +161,8 @@ export default function AdminUsersPage() {
                       <TableRow key={u.id}>
                         <TableCell className="font-medium">{u.name}</TableCell>
                         <TableCell>{u.email}</TableCell>
+                        <TableCell>{u.whatsapp}</TableCell>
+                        <TableCell>{u.cpf}</TableCell>
                         <TableCell className="capitalize">{u.plan}</TableCell>
                         <TableCell>{u.memberSince}</TableCell>
                         <TableCell>{u.lastPayment}</TableCell>
@@ -201,4 +208,3 @@ export default function AdminUsersPage() {
     </div>
   );
 }
-    
