@@ -13,9 +13,9 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarFooter,
-  useSidebar as useUiSidebar, // Renamed to avoid conflict
+  useSidebar as useUiSidebar, 
 } from '@/components/ui/sidebar';
-import { LeafIcon, LogOut } from 'lucide-react';
+import { LeafIcon, LogOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react'; // Added PanelLeftClose, PanelLeftOpen
 import { Button } from '@/components/ui/button';
 import { auth, signOut as firebaseSignOut } from '@/lib/firebase'; 
 import { useToast } from '@/hooks/use-toast';
@@ -27,7 +27,7 @@ export function AppSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { toast } = useToast();
-  const { setOpenMobile } = useUiSidebar(); 
+  const { setOpenMobile, toggleSidebar, state: sidebarState, isMobile } = useUiSidebar(); 
   const { user } = useAuth();
 
 
@@ -99,7 +99,24 @@ export function AppSidebar() {
         </SidebarMenu>
       </SidebarContent>
 
-      <SidebarFooter className="p-2 border-t border-sidebar-border mt-auto">
+      <SidebarFooter className="p-2 border-t border-sidebar-border mt-auto space-y-1">
+        {!isMobile && (
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-2 group-data-[collapsible=icon]:justify-center text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            onClick={toggleSidebar}
+            tooltip={{
+              children: sidebarState === 'expanded' ? "Encolher menu" : "Expandir menu",
+              className: "bg-sidebar-background text-sidebar-foreground border-sidebar-border group-data-[collapsible=icon]:block hidden"
+            }}
+            aria-label={sidebarState === 'expanded' ? "Encolher menu" : "Expandir menu"}
+          >
+            {sidebarState === 'expanded' ? <PanelLeftClose className="h-5 w-5" /> : <PanelLeftOpen className="h-5 w-5" />}
+            <span className="group-data-[collapsible=icon]:hidden">
+              {sidebarState === 'expanded' ? "Encolher" : "Expandir"}
+            </span>
+          </Button>
+        )}
         <Button 
             variant="ghost" 
             className="w-full justify-start gap-2 group-data-[collapsible=icon]:justify-center text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
@@ -109,6 +126,7 @@ export function AppSidebar() {
                 children: "Sair",
                 className: "bg-sidebar-background text-sidebar-foreground border-sidebar-border group-data-[collapsible=icon]:block hidden"
             }}
+            aria-label="Sair"
         >
            <LogOut className="h-5 w-5" />
            <span className="group-data-[collapsible=icon]:hidden">Sair</span>
