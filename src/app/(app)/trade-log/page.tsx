@@ -19,12 +19,14 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { db, collection, addDoc, getDocs, query, where, orderBy, Timestamp } from '@/lib/firebase';
 import { useAuth } from '@/components/auth-provider';
 
 const tradeSchema = z.object({
+  date: z.date({ required_error: "Data é obrigatória." }),
   asset: z.string().min(1, "Ativo é obrigatório."),
   type: z.enum(['compra', 'venda']),
   result: z.enum(['gain', 'loss', 'zero']),
@@ -55,11 +57,11 @@ type TradeFormValues = z.infer<typeof tradeSchema>;
 
 interface TradeEntryFirestore {
   userId: string;
-  date: Timestamp; // Salvar como Firestore Timestamp
+  date: Timestamp; 
   asset: string;
   type: 'compra' | 'venda';
   result: 'gain' | 'loss' | 'zero';
-  profit: number; // Valor monetário final com sinal
+  profit: number; 
   period: 'manhã' | 'tarde' | 'noite';
   setup?: string;
   emotionBefore: number;
@@ -69,7 +71,7 @@ interface TradeEntryFirestore {
 
 interface TradeEntry extends Omit<TradeEntryFirestore, 'date'> {
   id: string;
-  date: Date; // Converter para Date para uso no cliente
+  date: Date; 
 }
 
 
@@ -84,6 +86,7 @@ export default function TradeLogPage() {
   const form = useForm<TradeFormValues>({
     resolver: zodResolver(tradeSchema),
     defaultValues: {
+      date: new Date(),
       asset: '',
       type: 'compra',
       result: 'gain',
@@ -91,6 +94,8 @@ export default function TradeLogPage() {
       period: 'manhã',
       emotionBefore: 5,
       emotionAfter: 5,
+      setup: '',
+      comment: ''
     },
   });
   
@@ -114,16 +119,16 @@ export default function TradeLogPage() {
         fetchedTrades.push({ 
           ...data, 
           id: doc.id,
-          date: data.date.toDate() // Converter Timestamp para Date
+          date: data.date.toDate() 
         } as TradeEntry);
       });
       setTrades(fetchedTrades);
     } catch (error) {
-      console.error("Error fetching trades:", error);
+      console.error("Erro ao carregar trades:", error);
       toast({
         variant: "destructive",
         title: "Erro ao Carregar Trades",
-        description: "Não foi possível buscar seus trades registrados.",
+        description: "Não foi possível buscar seus trades registrados. Verifique o console.",
       });
     }
     setIsLoadingTrades(false);
@@ -152,11 +157,10 @@ export default function TradeLogPage() {
       } else if (data.result === 'loss') {
         calculatedProfit = -Math.abs(data.amount);
       }
-      // Se for 'zero', calculatedProfit permanece 0 (já validado pelo schema que amount é 0)
 
       const tradeToSave: TradeEntryFirestore = {
         userId: userId,
-        date: Timestamp.fromDate(new Date()), // Salvar como Firestore Timestamp
+        date: Timestamp.fromDate(data.date), 
         asset: data.asset,
         type: data.type,
         result: data.result,
@@ -176,11 +180,12 @@ export default function TradeLogPage() {
       setIsDialogOpen(false);
       fetchTrades(); 
     } catch (error: any) {
-      console.error("Error saving trade:", error, error.stack);
+      console.error("Erro detalhado ao salvar trade no Firestore:", error, error.stack);
       toast({
         variant: "destructive",
         title: "Erro ao Salvar Trade",
-        description: "Não foi possível registrar sua operação. Verifique o console para mais detalhes.",
+        description: `Não foi possível registrar sua operação. Causa: ${error.message || 'Erro desconhecido'}. Verifique o console para mais detalhes.`,
+        duration: 7000,
       });
     }
   };
@@ -202,7 +207,7 @@ export default function TradeLogPage() {
         <h1 className="text-3xl font-bold font-headline">Diário de Operações</h1>
         <Dialog open={isDialogOpen} onOpenChange={(isOpen) => {
           setIsDialogOpen(isOpen);
-          if (!isOpen) form.reset(); // Resetar form ao fechar
+          if (!isOpen) form.reset(); 
         }}>
           <DialogTrigger asChild>
             <Button disabled={!userId}>
@@ -215,6 +220,49 @@ export default function TradeLogPage() {
             </DialogHeader>
             <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="date"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Data da Operação</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "PPP", { locale: ptBR })
+                            ) : (
+                              <span>Escolha uma data</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          disabled={(date) =>
+                            date > new Date() || date < new Date("2000-01-01")
+                          }
+                          initialFocus
+                          locale={ptBR}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField control={form.control} name="asset" render={({ field }) => (
                     <FormItem>
@@ -251,15 +299,15 @@ export default function TradeLogPage() {
                             if (value === 'zero') {
                               form.setValue('amount', 0, { shouldValidate: true });
                             } else if (form.getValues('amount') === 0 && (value === 'gain' || value === 'loss')) {
-                               form.setValue('amount', undefined as any, { shouldValidate: true }); // Limpa para forçar validação
+                               form.setValue('amount', undefined as any, { shouldValidate: true }); 
                             }
                           }} 
                           defaultValue={field.value} 
                           className="flex space-x-4 items-center pt-2"
                         >
-                          <FormItem className="flex items-center space-x-2"><RadioGroupItem value="gain" /><FormLabel className="font-normal">Gain</FormLabel></FormItem>
-                          <FormItem className="flex items-center space-x-2"><RadioGroupItem value="loss" /><FormLabel className="font-normal">Loss</FormLabel></FormItem>
-                          <FormItem className="flex items-center space-x-2"><RadioGroupItem value="zero" /><FormLabel className="font-normal">Zero a Zero</FormLabel></FormItem>
+                          <FormItem className="flex items-center space-x-2"><RadioGroupItem value="gain" id="r-gain" /><FormLabel htmlFor="r-gain" className="font-normal">Gain</FormLabel></FormItem>
+                          <FormItem className="flex items-center space-x-2"><RadioGroupItem value="loss" id="r-loss" /><FormLabel htmlFor="r-loss" className="font-normal">Loss</FormLabel></FormItem>
+                          <FormItem className="flex items-center space-x-2"><RadioGroupItem value="zero" id="r-zero" /><FormLabel htmlFor="r-zero" className="font-normal">Zero a Zero</FormLabel></FormItem>
                         </RadioGroup>
                       </FormControl>
                       <FormMessage />
@@ -322,7 +370,10 @@ export default function TradeLogPage() {
               />
               <DialogFooter>
                 <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
-                <Button type="submit">Salvar Trade</Button>
+                <Button type="submit" disabled={form.formState.isSubmitting}>
+                  {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Salvar Trade
+                </Button>
               </DialogFooter>
             </form>
             </Form>
@@ -340,9 +391,10 @@ export default function TradeLogPage() {
                 "w-[240px] justify-start text-left font-normal",
                 !filterDate && "text-muted-foreground"
               )}
+              disabled={isLoadingTrades}
             >
               <CalendarIcon className="mr-2 h-4 w-4" />
-              {filterDate ? format(filterDate, "PPP") : <span>Filtrar por data</span>}
+              {filterDate ? format(filterDate, "PPP", { locale: ptBR }) : <span>Filtrar por data</span>}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start">
@@ -351,10 +403,11 @@ export default function TradeLogPage() {
               selected={filterDate}
               onSelect={setFilterDate}
               initialFocus
+              locale={ptBR}
             />
           </PopoverContent>
         </Popover>
-        {filterDate && <Button variant="ghost" onClick={() => setFilterDate(undefined)}>Limpar filtro</Button>}
+        {filterDate && <Button variant="ghost" onClick={() => setFilterDate(undefined)} disabled={isLoadingTrades}>Limpar filtro</Button>}
       </div>
 
       <Card className="mb-8">
@@ -383,7 +436,7 @@ export default function TradeLogPage() {
               <TableBody>
                 {filteredTrades.length > 0 ? filteredTrades.map(trade => (
                   <TableRow key={trade.id}>
-                    <TableCell>{format(trade.date, "dd/MM/yyyy HH:mm")}</TableCell>
+                    <TableCell>{format(trade.date, "dd/MM/yyyy HH:mm", { locale: ptBR })}</TableCell>
                     <TableCell>{trade.asset}</TableCell>
                     <TableCell>{trade.type === 'compra' ? 'Compra' : 'Venda'}</TableCell>
                     <TableCell className="capitalize">{trade.period}</TableCell>
@@ -395,7 +448,7 @@ export default function TradeLogPage() {
                   </TableRow>
                 )) : (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center">Nenhum trade encontrado para {filterDate ? `o dia ${format(filterDate, "dd/MM/yyyy")}` : 'o período selecionado'}.</TableCell>
+                    <TableCell colSpan={7} className="text-center">Nenhum trade encontrado para {filterDate ? `o dia ${format(filterDate, "dd/MM/yyyy", { locale: ptBR })}` : 'o período selecionado'}.</TableCell>
                   </TableRow>
                 )}
               </TableBody>
@@ -430,4 +483,3 @@ export default function TradeLogPage() {
     </div>
   );
 }
-
