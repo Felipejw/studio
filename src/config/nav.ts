@@ -1,6 +1,6 @@
 
 import type { LucideIcon } from 'lucide-react';
-import { LayoutDashboard, FileText, BookOpenText, Brain, Gauge, User, DollarSign, Users as GroupsIcon } from 'lucide-react';
+import { LayoutDashboard, FileText, BookOpenText, Brain, Gauge, User, DollarSign, Users as GroupsIcon, ClipboardList } from 'lucide-react';
 
 export interface NavItem {
   title: string;
@@ -35,6 +35,12 @@ export const navItems: NavItem[] = [
     icon: Brain,
     label: 'Apoio Emocional',
   },
+   {
+    title: 'Teste de Perfil',
+    href: '/trader-profile-test',
+    icon: ClipboardList,
+    label: 'Descubra seu Perfil',
+  },
   {
     title: 'Gestor de Risco',
     href: '/risk-manager',
@@ -60,4 +66,3 @@ export const navItems: NavItem[] = [
     label: 'Seu Perfil e Plano',
   },
 ];
-
