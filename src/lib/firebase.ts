@@ -1,27 +1,28 @@
 
 // src/lib/firebase.ts
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
-import { 
-  getFirestore, 
-  collection, 
-  addDoc, 
-  getDocs, 
-  query, 
-  where, 
-  doc, 
-  setDoc, 
-  getDoc, 
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+  query,
+  where,
+  doc,
+  setDoc,
+  getDoc,
   updateDoc,
-  deleteDoc, // Ensure deleteDoc is imported
+  deleteDoc,
   orderBy,
-  Timestamp, // Import Timestamp
+  Timestamp,
+  writeBatch, // Ensure writeBatch is imported here
   type Firestore
 } from 'firebase/firestore';
-import { 
-  getAuth, 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  signOut, 
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
   onAuthStateChanged,
   type Auth,
   type User
@@ -41,8 +42,8 @@ if (!apiKey || !authDomain || !projectId) {
   if (!apiKey) missingKeys.push('NEXT_PUBLIC_FIREBASE_API_KEY');
   if (!authDomain) missingKeys.push('NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN');
   if (!projectId) missingKeys.push('NEXT_PUBLIC_FIREBASE_PROJECT_ID');
-  
-  const errorMessage = `🔴 Firebase Configuration Error: The following environment variables are missing or empty: ${missingKeys.join(', ')}. 
+
+  const errorMessage = `🔴 Firebase Configuration Error: The following environment variables are missing or empty: ${missingKeys.join(', ')}.
     This is likely the cause of any 'auth/invalid-api-key' errors you are seeing in the browser.
     Please ensure:
     1. You have a file named '.env.local' (or '.env') in the ROOT of your project directory.
@@ -56,7 +57,7 @@ if (!apiKey || !authDomain || !projectId) {
     Storage Bucket: ${storageBucket ? 'Loaded' : 'OPTIONAL_BUT_RECOMMENDED'}
     Messaging Sender ID: ${messagingSenderId ? 'Loaded' : 'OPTIONAL_BUT_RECOMMENDED'}
     App ID: ${appId ? 'Loaded' : 'OPTIONAL_BUT_RECOMMENDED'}`;
-  
+
   console.error(errorMessage);
   // NOTE: This console.error runs in the environment where this module is imported.
   // For client-side, it's the browser. For server-side (e.g., during build or SSR), it's the terminal.
@@ -91,29 +92,30 @@ let auth: Auth;
 
 try {
   db = getFirestore(app);
-  auth = getAuth(app); 
+  auth = getAuth(app);
 } catch (e: any) {
    console.error("🔴 Firestore/Auth Initialization Error after app init:", e.message, "This might happen if Firebase app initialized but services failed (e.g. due to rules or deeper config issues).");
    throw new Error("Firestore/Auth services could not be initialized. Check console.");
 }
 
 
-export { 
-  db, 
-  auth, 
+export {
+  db,
+  auth,
   app,
-  collection, 
-  addDoc, 
-  getDocs, 
-  query, 
+  collection,
+  addDoc,
+  getDocs,
+  query,
   where,
   doc,
   setDoc,
   getDoc,
   updateDoc,
-  deleteDoc, // Ensure deleteDoc is exported
+  deleteDoc,
   orderBy,
-  Timestamp, // Export Timestamp
+  Timestamp,
+  writeBatch, // Ensure writeBatch is exported here
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
