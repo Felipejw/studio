@@ -4,41 +4,41 @@
 
 @layer base {
   :root {
-    --background: 210 40% 98%; /* Very Light Cool Gray */
-    --foreground: 210 10% 23%; /* Dark Cool Gray */
-    --card: 0 0% 100%;
-    --card-foreground: 210 10% 23%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 210 10% 23%;
-    --primary: 217 91% 60%; /* Vibrant Blue */
-    --primary-foreground: 0 0% 100%; /* White */
-    --secondary: 210 30% 94%; /* Light Grayish Blue */
-    --secondary-foreground: 210 10% 30%;
-    --muted: 210 30% 90%;
-    --muted-foreground: 210 5% 45%;
-    --accent: 39 92% 56%; /* Amber/Orange */
-    --accent-foreground: 210 10% 15%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 210 20% 88%;
-    --input: 210 20% 92%;
-    --ring: 217 91% 60%; /* Vibrant Blue for focus rings */
-    --chart-1: 217 91% 60%;
-    --chart-2: 39 92% 56%;
-    --chart-3: 160 70% 45%;
-    --chart-4: 280 70% 60%;
-    --chart-5: 0 70% 60%;
+    --background: 210 17% 98%; /* #F9FAFB (Branco gelo) */
+    --foreground: 222 39% 11%; /* #111827 (Cinza muito escuro) */
+    --card: 220 14% 96%; /* #F3F4F6 (Cinza bem claro) */
+    --card-foreground: 222 39% 11%; /* #111827 (Cinza muito escuro) */
+    --popover: 220 14% 96%; /* #F3F4F6 (Cinza bem claro) */
+    --popover-foreground: 222 39% 11%; /* #111827 (Cinza muito escuro) */
+    --primary: 218 28% 17%; /* #1F2937 (Preto suave) */
+    --primary-foreground: 210 17% 98%; /* #F9FAFB (Branco gelo) */
+    --secondary: 220 16% 93%; /* #E5E7EB (Cinza claro para botões secundários) */
+    --secondary-foreground: 222 39% 11%; /* #111827 (Cinza muito escuro) */
+    --muted: 216 13% 84%; /* #D1D5DB (Cinza neutro para elementos menos destacados) */
+    --muted-foreground: 215 14% 58%; /* #6B7280 (Cinza médio) */
+    --accent: 180 100% 25%; /* #008080 (Teal Forte - para destaques e foco) */
+    --accent-foreground: 0 0% 100%; /* #FFFFFF (Branco para texto sobre accent) */
+    --destructive: 355 76% 59%; /* #E63946 (Vermelho alerta) */
+    --destructive-foreground: 210 17% 98%; /* #F9FAFB (Branco gelo para texto sobre destructive) */
+    --border: 216 13% 84%; /* #D1D5DB (Cinza neutro) */
+    --input: 216 13% 84%; /* #D1D5DB (Cinza neutro para borda de input) */
+    --ring: 180 100% 25%; /* #008080 (Teal Forte para anéis de foco) */
+    --chart-1: 217 91% 60%; /* Mantido do tema original, pode ser ajustado */
+    --chart-2: 39 92% 56%; /* Mantido do tema original, pode ser ajustado */
+    --chart-3: 160 70% 45%; /* Mantido do tema original, pode ser ajustado */
+    --chart-4: 280 70% 60%; /* Mantido do tema original, pode ser ajustado */
+    --chart-5: 0 70% 60%; /* Mantido do tema original, pode ser ajustado */
     --radius: 0.5rem;
 
     /* Sidebar specific colors - Light Theme */
-    --sidebar-background: 220 25% 15%; /* Darker Blue-Gray */
-    --sidebar-foreground: 210 20% 90%; /* Lighter Gray for text */
-    --sidebar-primary: 217 85% 65%; /* Brighter Blue for active items */
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 25% 22%; /* Slightly lighter Dark Blue-Gray for hover */
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 220 25% 25%;
-    --sidebar-ring: 217 85% 70%;
+    --sidebar-background: 218 28% 17%; /* #1F2937 (Preto suave - Dark Sidebar) */
+    --sidebar-foreground: 210 17% 98%; /* #F9FAFB (Branco gelo) */
+    --sidebar-primary: 180 100% 25%; /* #008080 (Teal Forte para itens ativos) */
+    --sidebar-primary-foreground: 0 0% 100%; /* #FFFFFF (Branco) */
+    --sidebar-accent: 218 22% 27%; /* #374151 (Tom mais claro de preto suave para hover) */
+    --sidebar-accent-foreground: 210 17% 98%; /* #F9FAFB (Branco gelo) */
+    --sidebar-border: 218 16% 34%; /* #4B5563 (Tom para borda da sidebar) */
+    --sidebar-ring: 180 100% 25%; /* #008080 (Teal Forte para anéis de foco na sidebar) */
   }
 
   .dark {
