@@ -8,7 +8,7 @@ import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth, type UserPlan as AuthUserPlan, type UserProfileData as AuthUserProfileData } from '@/components/auth-provider';
-import { db, collection, getDocs, doc, updateDoc, Timestamp, query, orderBy as firestoreOrderBy, deleteDoc, where, writeBatch } from '@/lib/firebase';
+import { db, collection, getDocs, doc, updateDoc, Timestamp, query, orderBy as firestoreOrderBy, deleteDoc, where, writeBatch, getDoc } from '@/lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -21,6 +21,7 @@ import { Loader2, ShieldAlert, Users, ArrowLeft, Phone, Fingerprint, Edit, Trash
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale'; // Added import for ptBR
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
@@ -33,7 +34,6 @@ interface UserProfileDataFirestore extends AuthUserProfileData {}
 
 interface UserProfileAdminView extends Omit<UserProfileDataFirestore, 'memberSince' | 'lastPayment'> {
   id: string; // Firestore document ID
-  // memberSince: string; // REMOVED
   lastPaymentDisplay?: string | null; // Formatted date string for display
   originalLastPayment?: Timestamp | null; // Original Timestamp for editing
   whatsapp: string; // Ensure it's always string, 'N/A' if not present
@@ -506,3 +506,4 @@ export default function AdminUsersPage() {
     </div>
   );
 }
+
