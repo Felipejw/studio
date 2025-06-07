@@ -11,10 +11,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Slider } from '@/components/ui/slider';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { getAiPsychologistResponse, type GetAiPsychologistResponseInput, type GetAiPsychologistResponseOutput } from '@/ai/flows/get-ai-psychologist-response';
-import { Loader2, Sparkles, MessageSquare, Activity, ShieldAlert } from 'lucide-react';
+import { Loader2, Sparkles, MessageSquare, ShieldAlert } from 'lucide-react'; // Activity removed
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { db, collection, addDoc, query, where, orderBy, getDocs, Timestamp } from '@/lib/firebase'; 
+import { db, collection, query, where, orderBy, getDocs, Timestamp } from '@/lib/firebase'; 
 import { useAuth } from '@/components/auth-provider';
 import Link from 'next/link';
 
@@ -35,6 +35,11 @@ interface ChatEntryFirestore {
 interface ChatEntry extends Omit<ChatEntryFirestore, 'timestamp'> {
   id: string; 
   timestamp: Date; 
+}
+
+interface LatestInteraction {
+  userInput: PsychologistFormValues;
+  aiResponse: GetAiPsychologistResponseOutput;
 }
 
 function AccessDeniedPremium() {
@@ -67,6 +72,7 @@ export default function AiPsychologistPage() {
   const [chatHistory, setChatHistory] = useState<ChatEntry[]>([]);
   const [isSubmittingForm, setIsSubmittingForm] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [latestInteraction, setLatestInteraction] = useState<LatestInteraction | null>(null);
   const { toast } = useToast();
   const { user, userId, userProfile, loading: authLoading, profileLoading } = useAuth();
 
@@ -129,29 +135,26 @@ export default function AiPsychologistPage() {
       return;
     }
     setIsSubmittingForm(true);
+    setLatestInteraction(null); // Clear previous latest interaction
     try {
       const response = await getAiPsychologistResponse(data);
       
-      const newEntryToSave: ChatEntryFirestore = {
-        userId: userId,
-        userInput: data,
-        aiResponse: response,
-        timestamp: Timestamp.fromDate(new Date()), 
-      };
-      await addDoc(collection(db, "mindset_logs"), newEntryToSave);
+      setLatestInteraction({ userInput: data, aiResponse: response });
       
       toast({
-        title: "Resposta Recebida!",
-        description: "Sua conversa com o Psicólogo IA foi salva.",
+        title: "Resposta da IA Recebida!",
+        description: "A IA respondeu à sua consulta.",
       });
       form.reset();
-      fetchChatHistory(); 
+      // We don't save the new interaction, but old history can still be relevant
+      // fetchChatHistory(); // Optionally re-fetch if needed, but new entry won't be there.
+                           // Let's keep it to show previous logs persist.
     } catch (error: any) {
       console.error("Detailed AI response error:", error);
       toast({
         variant: "destructive",
         title: "Erro na Interação com IA",
-        description: `Não foi possível obter resposta da IA ou salvar o log. ${error?.message || 'Verifique o console para mais detalhes.'}`,
+        description: `Não foi possível obter resposta da IA. ${error?.message || 'Verifique o console para mais detalhes.'}`,
       });
     }
     setIsSubmittingForm(false);
@@ -178,8 +181,8 @@ export default function AiPsychologistPage() {
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-bold mb-8 font-headline">Psicólogo Virtual com IA</h1>
       
-      <div className="grid md:grid-cols-3 gap-8">
-        <div className="md:col-span-2">
+      <div className="grid grid-cols-1 gap-8"> {/* Simplified grid */}
+        <div> {/* Main content area */}
           <Card>
             <CardHeader>
               <CardTitle className="font-headline">Como você está se sentindo?</CardTitle>
@@ -235,11 +238,27 @@ export default function AiPsychologistPage() {
             </CardContent>
           </Card>
 
+          {latestInteraction && (
+            <Card className="mt-8">
+              <CardHeader>
+                <CardTitle className="font-headline flex items-center">
+                  <Sparkles className="mr-2 h-5 w-5 text-primary" /> Resposta Atual da IA
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="font-semibold mb-1">Você:</p>
+                <p className="text-sm mb-3 whitespace-pre-line bg-muted p-2 rounded">{latestInteraction.userInput.feelings} (Emoção: {latestInteraction.userInput.emotionalState}/10)</p>
+                <p className="font-semibold mb-1 text-primary">IA Psicólogo:</p>
+                <p className="text-sm whitespace-pre-line bg-primary/10 p-2 rounded">{latestInteraction.aiResponse.advice}</p>
+              </CardContent>
+            </Card>
+          )}
+
           { (isLoadingHistory || chatHistory.length > 0) && (
             <Card className="mt-8">
               <CardHeader>
                 <CardTitle className="font-headline flex items-center">
-                  <MessageSquare className="mr-2 h-5 w-5" /> Histórico de Conversas
+                  <MessageSquare className="mr-2 h-5 w-5" /> Histórico de Conversas Salvas
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -249,7 +268,7 @@ export default function AiPsychologistPage() {
                     <p className="ml-2">Carregando histórico...</p>
                   </div>
                 ) : chatHistory.length === 0 ? (
-                  <p className="text-muted-foreground">Nenhuma conversa anterior encontrada.</p>
+                  <p className="text-muted-foreground">Nenhuma conversa anterior salva encontrada.</p>
                 ) : (
                   <ScrollArea className="max-h-[60vh] md:max-h-[400px] pr-4">
                     <div className="space-y-6">
@@ -270,33 +289,6 @@ export default function AiPsychologistPage() {
               </CardContent>
             </Card>
           )}
-        </div>
-
-        <div className="md:col-span-1 space-y-6">
-            <Card>
-                <CardHeader>
-                    <CardTitle className="font-headline flex items-center"><Activity className="mr-2 h-5 w-5" />Teste Semanal</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <p className="text-sm text-muted-foreground mb-2">
-                        Como está seu emocional para o trade esta semana?
-                    </p>
-                    <Button variant="outline" className="w-full" disabled>Iniciar Teste (Em breve)</Button>
-                    <p className="text-xs text-muted-foreground mt-2">
-                        Este teste rápido ajudará a avaliar sua prontidão emocional para os desafios do mercado.
-                    </p>
-                </CardContent>
-            </Card>
-             <Card>
-                <CardHeader>
-                    <CardTitle className="font-headline">Dica Rápida</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <p className="text-sm">
-                       Lembre-se: a gestão emocional é tão crucial quanto a análise técnica. Pausas regulares e autoavaliação são chaves para a consistência.
-                    </p>
-                </CardContent>
-            </Card>
         </div>
       </div>
     </div>
