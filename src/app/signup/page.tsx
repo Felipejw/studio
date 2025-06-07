@@ -5,7 +5,7 @@ import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
-import Image from 'next/image'; // Import next/image
+// Image component is no longer needed here
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,6 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { createUserWithEmailAndPassword, auth, setDoc, doc, db, Timestamp } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
-// SharkIcon não é mais necessário aqui
 import { Loader2 } from 'lucide-react';
 import type { UserPlan } from '@/components/auth-provider'; // Import UserPlan type
 
@@ -80,13 +79,7 @@ export default function SignupPage() {
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="text-center">
           <Link href="/" className="mb-4 inline-flex items-center justify-center space-x-2">
-             <Image 
-              src="/logo-tubaroes-da-bolsa.png" 
-              alt="Tubarões da Bolsa Logo" 
-              width={40} // Ajuste o tamanho conforme necessário
-              height={40}
-              data-ai-hint="company logo"
-            />
+             <span className="text-3xl" role="img" aria-label="Tubarão">🦈</span>
              <span className="text-2xl font-bold font-headline">Tubarões da Bolsa</span>
           </Link>
           <CardTitle className="text-2xl font-headline">Criar Nova Conta</CardTitle>

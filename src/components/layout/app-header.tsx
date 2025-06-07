@@ -2,10 +2,9 @@
 "use client";
 
 import Link from 'next/link';
-import Image from 'next/image'; // Import next/image
+// Image component is no longer needed here
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { ThemeToggle } from '@/components/theme-toggle';
-// SharkIcon não é mais necessário aqui
 import { Loader2, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { useDashboardHeader } from '@/contexts/dashboard-header-context';
 import { usePathname } from 'next/navigation';
@@ -48,13 +47,7 @@ export function AppHeader() {
       <div className="container flex h-14 items-center">
         <div className="mr-4 hidden md:flex">
           <Link href="/dashboard" className="mr-6 flex items-center space-x-2">
-            <Image 
-              src="/logo-tubaroes-da-bolsa.png" 
-              alt="Tubarões da Bolsa Logo" 
-              width={24} // Ajuste o tamanho conforme necessário
-              height={24}
-              data-ai-hint="company logo"
-            />
+            <span className="text-xl" role="img" aria-label="Tubarão">🦈</span>
             <span className="hidden font-bold sm:inline-block font-headline">
               Tubarões da Bolsa
             </span>
@@ -70,13 +63,7 @@ export function AppHeader() {
            {/* Mobile Logo - visible only when sidebar is hidden, so it needs to be outside the md:flex block */}
           <div className="md:hidden">
             <Link href="/dashboard" className="flex items-center space-x-2">
-              <Image 
-                src="/logo-tubaroes-da-bolsa.png" 
-                alt="Tubarões da Bolsa Logo" 
-                width={24}
-                height={24}
-                data-ai-hint="company logo"
-              />
+              <span className="text-xl" role="img" aria-label="Tubarão">🦈</span>
               <span className="font-bold font-headline">Tubarões da Bolsa</span>
             </Link>
           </div>
