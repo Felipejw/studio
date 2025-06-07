@@ -1,49 +1,98 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { MessageSquare, Users, LogIn, LogOut } from 'lucide-react';
+import { MessageSquare, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { useAuth } from '@/components/auth-provider';
+import { db, collection, addDoc, getDocs, query, where, orderBy, Timestamp } from '@/lib/firebase';
 
-interface Message {
-  id: string;
-  user: string;
+interface MessageData {
+  groupId: 'índice' | 'dólar' | 'forex';
+  userId: string;
+  userName: string;
   text: string;
-  time: string;
-  type: 'índice' | 'dólar' | 'forex';
+  timestamp: Timestamp;
 }
 
-const initialMessages: Message[] = [
-  { id: '1', user: 'Trader Z', text: 'Bom dia, pessoal! Alguma análise pro mini índice hoje?', time: '09:02', type: 'índice' },
-  { id: '3', user: 'Analista X', text: 'O dólar parece estar buscando liquidez acima dos 5.40. Cautela!', time: '09:01', type: 'dólar' },
-  { id: '4', user: 'Forex King', text: 'EUR/USD consolidado, aguardando notícias da Europa.', time: '08:55', type: 'forex' },
-  { id: '5', user: 'Novato Y', text: 'Alguém pode me explicar o ajuste do dólar de ontem?', time: '09:10', type: 'dólar' },
-  { id: '6', user: 'Especialista FX', text: 'Atenção ao payroll americano, pode impactar forte o EUR/USD!', time: '09:15', type: 'forex' },
-];
+interface Message extends Omit<MessageData, 'timestamp'> {
+  id: string;
+  timestamp: Date; // Convert Firestore Timestamp to Date for display
+}
 
 function GroupContent({ groupName, assetType }: { groupName: string, assetType: 'índice' | 'dólar' | 'forex' }) {
-  const [messages, setMessages] = useState<Message[]>(() => 
-    initialMessages.filter(msg => msg.type === assetType)
-  );
+  const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [isLoadingMessages, setIsLoadingMessages] = useState(true);
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const { user, userProfile, userId } = useAuth();
 
-  const handleSendMessage = () => {
-    if (newMessage.trim() === '') return;
-    const now = new Date();
-    const newMessageObj: Message = {
-      id: String(Date.now()), 
-      user: 'Você',
+  const fetchMessages = useCallback(async () => {
+    if (!userId) {
+      setMessages([]);
+      setIsLoadingMessages(false);
+      return;
+    }
+    setIsLoadingMessages(true);
+    try {
+      const q = query(
+        collection(db, "trader_group_messages"),
+        where("groupId", "==", assetType),
+        orderBy("timestamp", "asc") // Fetch in ascending order to display oldest first
+      );
+      const querySnapshot = await getDocs(q);
+      const fetchedMessages: Message[] = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data() as MessageData;
+        fetchedMessages.push({
+          ...data,
+          id: doc.id,
+          timestamp: data.timestamp.toDate(),
+        });
+      });
+      setMessages(fetchedMessages);
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+      // Consider adding a toast notification for the user here
+    }
+    setIsLoadingMessages(false);
+  }, [assetType, userId]);
+
+  useEffect(() => {
+    fetchMessages();
+  }, [fetchMessages]);
+
+  const handleSendMessage = async () => {
+    if (newMessage.trim() === '' || !userId || !userProfile) {
+      // Optionally, show a toast if user is not logged in or message is empty
+      return;
+    }
+    setIsSendingMessage(true);
+    const messageData: MessageData = {
+      groupId: assetType,
+      userId: userId,
+      userName: userProfile.name || 'Usuário Anônimo',
       text: newMessage,
-      time: format(now, 'HH:mm'),
-      type: assetType,
+      timestamp: Timestamp.fromDate(new Date()),
     };
-    setMessages(prevMessages => [...prevMessages, newMessageObj]);
-    setNewMessage('');
+
+    try {
+      await addDoc(collection(db, "trader_group_messages"), messageData);
+      setNewMessage('');
+      // After sending, refetch messages to include the new one
+      // This is not real-time, but updates the list for the sender.
+      // Others will see it on their next fetch (e.g., page load or their own send).
+      await fetchMessages(); 
+    } catch (error) {
+      console.error("Error sending message:", error);
+      // Consider adding a toast notification for the user here
+    }
+    setIsSendingMessage(false);
   };
 
   return (
@@ -54,41 +103,56 @@ function GroupContent({ groupName, assetType }: { groupName: string, assetType: 
             <CardTitle className="font-headline flex items-center text-lg">
               <MessageSquare className="mr-2 h-5 w-5 text-primary" /> Discussão: {groupName}
             </CardTitle>
-            <CardDescription>Converse com outros traders sobre {assetType}. (As mensagens são apenas locais)</CardDescription>
+            <CardDescription>Converse com outros traders sobre {assetType}. (As mensagens são salvas no servidor)</CardDescription>
           </CardHeader>
           <CardContent className="flex-grow flex flex-col p-0 overflow-hidden">
             <ScrollArea className="flex-grow p-4">
-              <div className="space-y-4">
-                {messages.length > 0 ? messages.map(msg => (
-                  <div key={msg.id} className={`flex ${msg.user === 'Você' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`p-3 rounded-lg max-w-[75%] shadow-sm ${msg.user === 'Você' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
-                      <p className="text-xs font-semibold mb-0.5">{msg.user}</p>
-                      <p className="text-sm whitespace-pre-line">{msg.text}</p>
-                      <p className="text-xs text-right opacity-70 mt-1">{msg.time}</p>
+              {isLoadingMessages ? (
+                <div className="flex justify-center items-center h-full">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <p className="ml-2">Carregando mensagens...</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {messages.length > 0 ? messages.map(msg => (
+                    <div key={msg.id} className={`flex ${msg.userId === userId ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`p-3 rounded-lg max-w-[75%] shadow-sm ${msg.userId === userId ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+                        <p className="text-xs font-semibold mb-0.5">{msg.userName} {msg.userId === userId && "(Você)"}</p>
+                        <p className="text-sm whitespace-pre-line">{msg.text}</p>
+                        <p className="text-xs text-right opacity-70 mt-1">{format(msg.timestamp, 'HH:mm')}</p>
+                      </div>
                     </div>
-                  </div>
-                )) : (
-                  <p className="text-muted-foreground text-center py-8">Nenhuma mensagem neste grupo ainda. Seja o primeiro!</p>
-                )}
-              </div>
+                  )) : (
+                    <p className="text-muted-foreground text-center py-8">Nenhuma mensagem neste grupo ainda. Seja o primeiro!</p>
+                  )}
+                </div>
+              )}
             </ScrollArea>
             <div className="p-4 border-t bg-background">
               <div className="flex gap-2">
                 <Textarea 
-                  placeholder="Digite sua mensagem..." 
+                  placeholder={user ? "Digite sua mensagem..." : "Faça login para enviar mensagens."}
                   className="flex-grow resize-none" 
                   rows={1}
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
                   onKeyPress={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
+                    if (e.key === 'Enter' && !e.shiftKey && user) {
                       e.preventDefault();
                       handleSendMessage();
                     }
                   }}
+                  disabled={!user || isSendingMessage || isLoadingMessages}
                 />
-                <Button size="default" onClick={handleSendMessage}>Enviar</Button>
+                <Button 
+                  size="default" 
+                  onClick={handleSendMessage} 
+                  disabled={!user || newMessage.trim() === '' || isSendingMessage || isLoadingMessages}
+                >
+                  {isSendingMessage ? <Loader2 className="h-4 w-4 animate-spin" /> : "Enviar"}
+                </Button>
               </div>
+               {!user && <p className="text-xs text-muted-foreground mt-1">Você precisa estar logado para enviar mensagens.</p>}
             </div>
           </CardContent>
         </Card>
@@ -107,14 +171,14 @@ export default function TraderGroupsPage() {
 
       <Tabs defaultValue="indice" className="w-full">
         <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 md:w-auto md:inline-flex mb-6 bg-muted p-1 rounded-lg shadow-sm">
-          <TabsTrigger value="indice" className="px-4 py-2.5 text-sm">Mini Índice (WIN)</TabsTrigger>
-          <TabsTrigger value="dolar" className="px-4 py-2.5 text-sm">Mini Dólar (WDO)</TabsTrigger>
+          <TabsTrigger value="índice" className="px-4 py-2.5 text-sm">Mini Índice (WIN)</TabsTrigger>
+          <TabsTrigger value="dólar" className="px-4 py-2.5 text-sm">Mini Dólar (WDO)</TabsTrigger>
           <TabsTrigger value="forex" className="px-4 py-2.5 text-sm">Forex & Internacional</TabsTrigger>
         </TabsList>
-        <TabsContent value="indice">
+        <TabsContent value="índice">
           <GroupContent groupName="Análises e Estratégias para WIN" assetType="índice" />
         </TabsContent>
-        <TabsContent value="dolar">
+        <TabsContent value="dólar">
           <GroupContent groupName="Movimentações e Operações em WDO" assetType="dólar" />
         </TabsContent>
         <TabsContent value="forex">
