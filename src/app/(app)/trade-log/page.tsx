@@ -19,7 +19,7 @@ import { PlusCircle, Filter, ListChecks, TrendingUp, Meh, Repeat, CalendarIcon, 
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, subDays } from "date-fns"; // Added subDays
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -122,9 +122,11 @@ export default function TradeLogPage() {
     }
     setIsLoadingTrades(true);
     try {
+      const ninetyDaysAgo = subDays(new Date(), 90);
       const q = query(
         collection(db, "trades"), 
         where("userId", "==", userId),
+        where("date", ">=", Timestamp.fromDate(ninetyDaysAgo)), // Filter for last 90 days
         orderBy("date", "desc")
       );
       const querySnapshot = await getDocs(q);
@@ -618,6 +620,7 @@ export default function TradeLogPage() {
         <Card className="mb-8">
           <CardHeader>
             <CardTitle className="font-headline flex items-center"><ListChecks className="mr-2 h-5 w-5" />Trades Registrados</CardTitle>
+            <CardDescription>Trades dos últimos 90 dias. Use o filtro para ver um dia específico.</CardDescription>
           </CardHeader>
           <CardContent>
             {isLoadingTrades ? (
@@ -661,12 +664,12 @@ export default function TradeLogPage() {
                     </TableRow>
                   )) : (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center h-24">Nenhum trade encontrado para {filterDate ? `o dia ${format(filterDate, "dd/MM/yyyy", { locale: ptBR })}` : 'o período selecionado'}.</TableCell>
+                      <TableCell colSpan={8} className="text-center h-24">Nenhum trade encontrado para {filterDate ? `o dia ${format(filterDate, "dd/MM/yyyy", { locale: ptBR })}` : 'os últimos 90 dias'}.</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
                 {filteredTrades.length > 0 && (
-                    <TableCaption>Total P/L {filterDate ? `do dia ${format(filterDate, "dd/MM/yyyy", {locale: ptBR})}` : "do período"}: <span className={totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}>R$ {totalProfit.toFixed(2)}</span></TableCaption>
+                    <TableCaption>Total P/L {filterDate ? `do dia ${format(filterDate, "dd/MM/yyyy", {locale: ptBR})}` : "dos últimos 90 dias"}: <span className={totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}>R$ {totalProfit.toFixed(2)}</span></TableCaption>
                 )}
               </Table>
             )}
@@ -693,7 +696,7 @@ export default function TradeLogPage() {
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         <Card>
           <CardHeader>
-            <CardTitle className="font-headline flex items-center"><BarChart3 className="mr-2 h-5 w-5 text-primary"/>Lucro x Perda {filterDate ? `(Dia ${format(filterDate, "dd/MM", {locale: ptBR})})` : "(Diário)"}</CardTitle>
+            <CardTitle className="font-headline flex items-center"><BarChart3 className="mr-2 h-5 w-5 text-primary"/>Lucro x Perda {filterDate ? `(Dia ${format(filterDate, "dd/MM", {locale: ptBR})})` : "(Agregado Diário - Últimos 90 Dias)"}</CardTitle>
             <CardDescription>Resultado financeiro dos trades.</CardDescription>
           </CardHeader>
           <CardContent className="h-80">
@@ -722,7 +725,7 @@ export default function TradeLogPage() {
         
         <Card>
           <CardHeader>
-            <CardTitle className="font-headline flex items-center"><LineChart className="mr-2 h-5 w-5 text-primary"/>Emoção Média {filterDate ? `(Dia ${format(filterDate, "dd/MM", {locale: ptBR})})` : "(Diária)"}</CardTitle>
+            <CardTitle className="font-headline flex items-center"><LineChart className="mr-2 h-5 w-5 text-primary"/>Emoção Média {filterDate ? `(Dia ${format(filterDate, "dd/MM", {locale: ptBR})})` : "(Agregado Diário - Últimos 90 Dias)"}</CardTitle>
              <CardDescription>Variação da emoção antes e depois dos trades.</CardDescription>
           </CardHeader>
           <CardContent className="h-80">
@@ -749,7 +752,7 @@ export default function TradeLogPage() {
         <Card>
           <CardHeader>
             <CardTitle className="font-headline flex items-center"><Repeat className="mr-2 h-5 w-5 text-primary"/>Desempenho Detalhado</CardTitle>
-             <CardDescription>Métricas chave dos trades filtrados.</CardDescription>
+             <CardDescription>Métricas chave ({filterDate ? `dia ${format(filterDate, "dd/MM", {locale: ptBR})}` : "últimos 90 dias"})</CardDescription>
           </CardHeader>
           <CardContent className="h-80 text-sm">
             {isLoadingTrades ? (<Loader2 className="mx-auto mt-12 h-8 w-8 animate-spin text-primary" />) : 
@@ -804,4 +807,6 @@ export default function TradeLogPage() {
     </div>
   );
 }
+    
+
     
