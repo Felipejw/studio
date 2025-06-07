@@ -8,17 +8,22 @@ import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth, type UserPlan as AuthUserPlan, type UserProfileData as AuthUserProfileData } from '@/components/auth-provider';
-import { db, collection, getDocs, doc, updateDoc, Timestamp, query, orderBy as firestoreOrderBy } from '@/lib/firebase';
+import { db, collection, getDocs, doc, updateDoc, Timestamp, query, orderBy as firestoreOrderBy, deleteDoc, where, writeBatch } from '@/lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { Loader2, ShieldAlert, Users, ArrowLeft, Phone, Fingerprint, Edit } from 'lucide-react';
+import { Loader2, ShieldAlert, Users, ArrowLeft, Phone, Fingerprint, Edit, Trash2, CalendarIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
+import { format, parseISO } from 'date-fns';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
 
 // Use UserPlan from auth-provider
 type UserPlan = AuthUserPlan;
@@ -28,15 +33,19 @@ interface UserProfileDataFirestore extends AuthUserProfileData {}
 
 interface UserProfileAdminView extends Omit<UserProfileDataFirestore, 'memberSince' | 'lastPayment'> {
   id: string; // Firestore document ID
-  memberSince: string; // Formatted date string
-  lastPayment?: string; // Formatted date string
+  // memberSince: string; // REMOVED
+  lastPaymentDisplay?: string | null; // Formatted date string for display
+  originalLastPayment?: Timestamp | null; // Original Timestamp for editing
+  whatsapp: string; // Ensure it's always string, 'N/A' if not present
+  cpf: string; // Ensure it's always string, 'N/A' if not present
 }
 
 const editUserSchema = z.object({
   name: z.string().min(2, { message: "Nome deve ter pelo menos 2 caracteres." }),
-  email: z.string().email({ message: "Email inválido." }),
+  email: z.string().email({ message: "Email inválido." }), // Remains disabled in form
   whatsapp: z.string().optional(),
   cpf: z.string().optional(),
+  lastPayment: z.string().optional(), // Date string from input type="date" e.g., "YYYY-MM-DD"
 });
 
 type EditUserFormValues = z.infer<typeof editUserSchema>;
@@ -50,12 +59,14 @@ export default function AdminUsersPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserProfileAdminView | null>(null);
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<UserProfileAdminView | null>(null);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
 
   const { toast } = useToast();
 
   const editForm = useForm<EditUserFormValues>({
     resolver: zodResolver(editUserSchema),
-    defaultValues: { name: '', email: '', whatsapp: '', cpf: '' }
+    defaultValues: { name: '', email: '', whatsapp: '', cpf: '', lastPayment: '' }
   });
 
   useEffect(() => {
@@ -73,7 +84,7 @@ export default function AdminUsersPage() {
       const fetchUsers = async () => {
         setIsLoadingUsers(true);
         try {
-          const usersQuery = query(collection(db, 'users'), firestoreOrderBy('memberSince', 'desc'));
+          const usersQuery = query(collection(db, 'users'), firestoreOrderBy('name', 'asc')); // Order by name
           const querySnapshot = await getDocs(usersQuery);
           const fetchedUsers: UserProfileAdminView[] = [];
           querySnapshot.forEach((docSnap) => {
@@ -81,8 +92,8 @@ export default function AdminUsersPage() {
             fetchedUsers.push({
               ...data,
               id: docSnap.id,
-              memberSince: data.memberSince instanceof Timestamp ? data.memberSince.toDate().toLocaleDateString('pt-BR') : String(data.memberSince),
-              lastPayment: data.lastPayment ? (data.lastPayment instanceof Timestamp ? data.lastPayment.toDate().toLocaleDateString('pt-BR') : String(data.lastPayment)) : 'N/A',
+              lastPaymentDisplay: data.lastPayment ? (data.lastPayment instanceof Timestamp ? data.lastPayment.toDate().toLocaleDateString('pt-BR') : String(data.lastPayment)) : 'N/A',
+              originalLastPayment: data.lastPayment instanceof Timestamp ? data.lastPayment : null,
               whatsapp: data.whatsapp || 'N/A',
               cpf: data.cpf || 'N/A',
             });
@@ -116,11 +127,21 @@ export default function AdminUsersPage() {
 
   const handleEditUserClick = (userToEdit: UserProfileAdminView) => {
     setEditingUser(userToEdit);
+    let lastPaymentDateString = '';
+    if (userToEdit.originalLastPayment) {
+        try {
+            lastPaymentDateString = format(userToEdit.originalLastPayment.toDate(), 'yyyy-MM-dd');
+        } catch (e) {
+            console.error("Error formatting originalLastPayment for input:", e);
+        }
+    }
+
     editForm.reset({
       name: userToEdit.name,
       email: userToEdit.email,
       whatsapp: userToEdit.whatsapp === 'N/A' ? '' : userToEdit.whatsapp,
       cpf: userToEdit.cpf === 'N/A' ? '' : userToEdit.cpf,
+      lastPayment: lastPaymentDateString,
     });
     setIsEditModalOpen(true);
   };
@@ -130,15 +151,39 @@ export default function AdminUsersPage() {
     setIsSubmittingEdit(true);
     try {
       const userDocRef = doc(db, 'users', editingUser.id);
+      let newLastPaymentTimestamp: Timestamp | null = editingUser.originalLastPayment || null;
+
+      if (data.lastPayment) {
+        try {
+            const parsedDate = parseISO(data.lastPayment); // YYYY-MM-DD
+            newLastPaymentTimestamp = Timestamp.fromDate(parsedDate);
+        } catch (e) {
+            toast({ variant: "destructive", title: "Data Inválida", description: "O formato da data de último pagamento é inválido." });
+            setIsSubmittingEdit(false);
+            return;
+        }
+      } else {
+        newLastPaymentTimestamp = null; // Clear the date
+      }
+
       await updateDoc(userDocRef, {
         name: data.name,
         whatsapp: data.whatsapp || '',
         cpf: data.cpf || '',
+        lastPayment: newLastPaymentTimestamp,
       });
+
       setUsersList(prevUsers =>
         prevUsers.map(u =>
           u.id === editingUser.id
-            ? { ...u, name: data.name, whatsapp: data.whatsapp || 'N/A', cpf: data.cpf || 'N/A' }
+            ? { 
+                ...u, 
+                name: data.name, 
+                whatsapp: data.whatsapp || 'N/A', 
+                cpf: data.cpf || 'N/A',
+                lastPaymentDisplay: newLastPaymentTimestamp ? newLastPaymentTimestamp.toDate().toLocaleDateString('pt-BR') : 'N/A',
+                originalLastPayment: newLastPaymentTimestamp,
+              }
             : u
         )
       );
@@ -152,6 +197,57 @@ export default function AdminUsersPage() {
     setIsSubmittingEdit(false);
   };
 
+  const handleDeleteUserConfirm = async () => {
+    if (!userToDelete) return;
+    setIsDeletingUser(true);
+    const userIdToDelete = userToDelete.id;
+
+    try {
+      const collectionsToDeleteFrom = [
+        { name: 'trades', field: 'userId' },
+        { name: 'trading_plans', field: 'userId' },
+        { name: 'mindset_logs', field: 'userId' },
+        { name: 'trader_group_messages', field: 'userId' }
+      ];
+
+      const batch = writeBatch(db);
+
+      // Delete from user-specific ID collections first
+      const riskConfigRef = doc(db, 'risk_config', userIdToDelete);
+      const riskConfigSnap = await getDoc(riskConfigRef);
+      if (riskConfigSnap.exists()) {
+        batch.delete(riskConfigRef);
+      }
+      
+      // Batch delete from other collections
+      for (const colInfo of collectionsToDeleteFrom) {
+        const q = query(collection(db, colInfo.name), where(colInfo.field, "==", userIdToDelete));
+        const snapshot = await getDocs(q);
+        snapshot.forEach(docSnap => batch.delete(docSnap.ref));
+      }
+
+      // Delete the main user document
+      const userDocRef = doc(db, 'users', userIdToDelete);
+      batch.delete(userDocRef);
+
+      await batch.commit();
+
+      setUsersList(prevUsers => prevUsers.filter(u => u.id !== userIdToDelete));
+      toast({
+        title: 'Dados do Usuário Excluídos do Firestore!',
+        description: `Todos os dados de ${userToDelete.name} foram removidos do Firestore. Lembre-se de excluir o usuário também do Firebase Authentication.`,
+        duration: 10000,
+      });
+    } catch (error: any) {
+      console.error("Error deleting user data:", error);
+      toast({ variant: "destructive", title: "Erro ao Excluir Dados", description: `Não foi possível excluir os dados do usuário. ${error.message}` });
+    } finally {
+      setIsDeletingUser(false);
+      setUserToDelete(null);
+    }
+  };
+
+
   if (authLoading || profileLoading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background p-4">
@@ -162,7 +258,7 @@ export default function AdminUsersPage() {
   }
 
   if (!userProfile || userProfile.email !== 'felipejw.fm@gmail.com') {
-    return null; // AuthProvider handles redirection, or this page can show an explicit "access denied"
+    return null; 
   }
 
   return (
@@ -205,10 +301,9 @@ export default function AdminUsersPage() {
                       <TableHead><Phone className="inline mr-1 h-4 w-4" />WhatsApp</TableHead>
                       <TableHead><Fingerprint className="inline mr-1 h-4 w-4" />CPF</TableHead>
                       <TableHead>Plano Atual</TableHead>
-                      <TableHead>Membro Desde</TableHead>
                       <TableHead>Último Pagamento</TableHead>
                       <TableHead className="text-center">Alterar Plano</TableHead>
-                      <TableHead className="text-center">Editar Dados</TableHead>
+                      <TableHead className="text-center">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -219,8 +314,7 @@ export default function AdminUsersPage() {
                         <TableCell>{u.whatsapp}</TableCell>
                         <TableCell>{u.cpf}</TableCell>
                         <TableCell className="capitalize">{u.plan === 'premium' ? 'Premium' : 'Gratuito'}</TableCell>
-                        <TableCell>{u.memberSince}</TableCell>
-                        <TableCell>{u.lastPayment}</TableCell>
+                        <TableCell>{u.lastPaymentDisplay}</TableCell>
                         <TableCell className="text-center w-[180px]">
                           {isUpdatingPlan === u.id ? (
                             <Loader2 className="h-5 w-5 animate-spin mx-auto" />
@@ -239,10 +333,36 @@ export default function AdminUsersPage() {
                             </Select>
                           )}
                         </TableCell>
-                        <TableCell className="text-center">
-                          <Button variant="outline" size="sm" onClick={() => handleEditUserClick(u)}>
+                        <TableCell className="text-center space-x-1">
+                          <Button variant="outline" size="sm" onClick={() => handleEditUserClick(u)} className="px-2 py-1 h-auto">
                             <Edit className="mr-1 h-3 w-3" /> Editar
                           </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm" onClick={() => setUserToDelete(u)} className="px-2 py-1 h-auto">
+                                    <Trash2 className="mr-1 h-3 w-3" /> Excluir
+                                </Button>
+                            </AlertDialogTrigger>
+                            {userToDelete && userToDelete.id === u.id && (
+                                <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Confirmar Exclusão de Dados</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                    Tem certeza que deseja excluir TODOS os dados do usuário "{userToDelete?.name}" ({userToDelete?.email}) do Firestore?
+                                    Esta ação não pode ser desfeita.
+                                    <br/><br/>
+                                    <strong>Importante:</strong> Você precisará excluir manualmente este usuário do Firebase Authentication após esta etapa.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel onClick={() => setUserToDelete(null)} disabled={isDeletingUser}>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={handleDeleteUserConfirm} disabled={isDeletingUser} className="bg-destructive hover:bg-destructive/90">
+                                    {isDeletingUser ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Confirmar Exclusão"}
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                                </AlertDialogContent>
+                            )}
+                           </AlertDialog>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -255,7 +375,7 @@ export default function AdminUsersPage() {
         </Card>
 
         <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Editar Usuário: {editingUser?.name}</DialogTitle>
             </DialogHeader>
@@ -284,7 +404,7 @@ export default function AdminUsersPage() {
                         <Input placeholder="email@example.com" {...field} disabled />
                       </FormControl>
                        <FormDescription className="text-xs">
-                        O email de login não pode ser alterado por aqui. Use o Firebase Authentication.
+                        O email de login não pode ser alterado por aqui.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -316,6 +436,47 @@ export default function AdminUsersPage() {
                     </FormItem>
                   )}
                 />
+                 <FormField
+                    control={editForm.control}
+                    name="lastPayment"
+                    render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                        <FormLabel>Último Pagamento</FormLabel>
+                         <Popover>
+                            <PopoverTrigger asChild>
+                                <FormControl>
+                                <Button
+                                    variant={"outline"}
+                                    className={cn(
+                                    "w-full pl-3 text-left font-normal",
+                                    !field.value && "text-muted-foreground"
+                                    )}
+                                >
+                                    {field.value ? (
+                                    format(parseISO(field.value), "PPP", { locale: ptBR })
+                                    ) : (
+                                    <span>Defina uma data</span>
+                                    )}
+                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                </Button>
+                                </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                mode="single"
+                                selected={field.value ? parseISO(field.value) : undefined}
+                                onSelect={(date) => field.onChange(date ? format(date, 'yyyy-MM-dd') : '')}
+                                disabled={(date) => date > new Date() || date < new Date("2020-01-01")}
+                                initialFocus
+                                locale={ptBR}
+                                />
+                            </PopoverContent>
+                        </Popover>
+                        <FormDescription className="text-xs">Deixe em branco para remover a data de último pagamento.</FormDescription>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
                 <DialogFooter>
                   <DialogClose asChild>
                     <Button type="button" variant="outline" onClick={() => setEditingUser(null)}>Cancelar</Button>
@@ -336,8 +497,9 @@ export default function AdminUsersPage() {
             <CardTitle className="text-lg text-yellow-700 dark:text-yellow-300">Notas Importantes</CardTitle>
           </CardHeader>
           <CardContent className="text-yellow-700 dark:text-yellow-400 text-sm space-y-1">
-            <p><strong>Gerenciamento de Acesso:</strong> Para desabilitar/habilitar o acesso de um usuário, utilize o console do Firebase Authentication.</p>
-            <p><strong>Impacto das Alterações:</strong> Mudanças de plano aqui afetam o acesso do usuário aos recursos da plataforma.</p>
+            <p><strong>Gerenciamento de Acesso:</strong> Para desabilitar/habilitar o acesso de um usuário (login), utilize o console do Firebase Authentication.</p>
+            <p><strong>Exclusão de Usuário:</strong> A exclusão aqui remove todos os dados do usuário do Firestore. A conta de autenticação (login) deve ser removida manualmente no console do Firebase.</p>
+            <p><strong>Impacto das Alterações:</strong> Mudanças de plano e último pagamento aqui afetam o acesso do usuário aos recursos da plataforma e informações de assinatura.</p>
           </CardContent>
         </Card>
       </main>
