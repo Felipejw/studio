@@ -17,8 +17,8 @@ export interface UserProfileData {
   whatsapp?: string;
   cpf?: string;
   plan: UserPlan;
-  memberSince: Timestamp | string; // Allow for string if already converted
-  lastPayment?: Timestamp | string; // Allow for string if already converted
+  memberSince: string; // Consistent ISO string
+  lastPayment?: string; // Consistent ISO string or undefined
 }
 
 interface AuthContextType {
@@ -56,18 +56,43 @@ export function AuthProvider({ children }: AuthProviderProps) {
           const userDocRef = doc(db, "users", currentUser.uid);
           const docSnap = await getDoc(userDocRef);
           if (docSnap.exists()) {
-            const profileData = docSnap.data() as UserProfileData;
+            const profileData = docSnap.data() as Omit<UserProfileData, 'memberSince' | 'lastPayment'> & { memberSince?: Timestamp | string, lastPayment?: Timestamp | string };
+            
+            let memberSinceStr: string;
+            if (profileData.memberSince instanceof Timestamp) {
+              memberSinceStr = profileData.memberSince.toDate().toISOString();
+            } else if (typeof profileData.memberSince === 'string' && !isNaN(new Date(profileData.memberSince).getTime())) {
+              memberSinceStr = new Date(profileData.memberSince).toISOString();
+            } else {
+              console.warn(`AuthProvider: memberSince for user ${currentUser.uid} is not a valid Timestamp or date string. Defaulting to current date. Value:`, profileData.memberSince);
+              memberSinceStr = new Date().toISOString();
+            }
+
+            let lastPaymentStr: string | undefined = undefined;
+            if (profileData.lastPayment) {
+              if (profileData.lastPayment instanceof Timestamp) {
+                lastPaymentStr = profileData.lastPayment.toDate().toISOString();
+              } else if (typeof profileData.lastPayment === 'string' && !isNaN(new Date(profileData.lastPayment).getTime())) {
+                lastPaymentStr = new Date(profileData.lastPayment).toISOString();
+              } else {
+                 console.warn(`AuthProvider: lastPayment for user ${currentUser.uid} is not a valid Timestamp or date string. Setting to undefined. Value:`, profileData.lastPayment);
+              }
+            }
+
             setUserProfile({
-              ...profileData,
-              // Ensure Timestamps are handled correctly if they come from Firestore directly
-              memberSince: profileData.memberSince instanceof Timestamp ? profileData.memberSince.toDate().toISOString() : String(profileData.memberSince),
-              lastPayment: profileData.lastPayment ? (profileData.lastPayment instanceof Timestamp ? profileData.lastPayment.toDate().toISOString() : String(profileData.lastPayment)) : undefined,
+              uid: profileData.uid,
+              name: profileData.name,
+              email: profileData.email,
+              whatsapp: profileData.whatsapp,
+              cpf: profileData.cpf,
+              plan: profileData.plan,
+              memberSince: memberSinceStr,
+              lastPayment: lastPaymentStr,
             });
+
           } else {
-            console.warn("User profile not found in Firestore for UID:", currentUser.uid);
-            // This case might occur if a user is created in Auth but Firestore doc creation fails
-            // Default to a 'free' plan or handle as an error state
-            setUserProfile({ // Create a minimal profile if not found
+            console.warn("User profile not found in Firestore for UID:", currentUser.uid, "This might occur if Firestore doc creation failed during signup. Creating a default local profile.");
+            setUserProfile({
                 uid: currentUser.uid,
                 name: currentUser.displayName || "Usuário",
                 email: currentUser.email || "",
@@ -77,13 +102,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
           }
         } catch (error) {
           console.error("Error fetching user profile:", error);
-          setUserProfile(null);
+          setUserProfile(null); // Ensure profile is null on error to avoid partial states
         } finally {
           setProfileLoadingState(false);
         }
       } else {
         setUserProfile(null);
-        setProfileLoadingState(false); // No user, so profile loading is complete
+        setProfileLoadingState(false); 
       }
     });
     return () => unsubscribe();
@@ -92,7 +117,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const combinedLoading = authLoadingState || (user != null && profileLoadingState);
 
   useEffect(() => {
-    if (combinedLoading) { // Use combinedLoading here
+    if (combinedLoading) { 
       return;
     }
 
@@ -101,20 +126,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const isAdminPage = pathname.startsWith('/admin');
 
     if (!user) {
-      if (!isPublicPage && !isAdminPage) { // Also allow access to /admin if not logged in (admin page handles its own auth)
+      if (!isPublicPage && !isAdminPage) { 
         router.replace('/login');
       }
     } else {
       if (isPublicPage) {
         router.replace('/dashboard');
       }
-      // Admin page access is handled within the admin page itself using userProfile.email
     }
   }, [user, combinedLoading, router, pathname]);
 
 
   if (combinedLoading && !pathname.startsWith('/admin') && pathname !== '/login' && pathname !== '/signup') {
-     // Show loading screen for protected routes while auth/profile is loading
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
