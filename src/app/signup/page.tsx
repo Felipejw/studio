@@ -13,7 +13,8 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { createUserWithEmailAndPassword, auth, setDoc, doc, db, Timestamp } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { LeafIcon, Loader2 } from 'lucide-react';
+import { SharkIcon } from '@/components/icons/shark-icon'; // Updated import
+import { Loader2 } from 'lucide-react';
 import type { UserPlan } from '@/components/auth-provider'; // Import UserPlan type
 
 const signupSchema = z.object({
@@ -78,8 +79,8 @@ export default function SignupPage() {
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="text-center">
           <Link href="/" className="mb-4 inline-flex items-center justify-center space-x-2">
-            <LeafIcon className="h-10 w-10 text-primary" />
-             <span className="text-2xl font-bold font-headline">Trader's Cockpit</span>
+            <SharkIcon className="h-10 w-10 text-primary" />
+             <span className="text-2xl font-bold font-headline">Tubarões da Bolsa</span>
           </Link>
           <CardTitle className="text-2xl font-headline">Criar Nova Conta</CardTitle>
           <CardDescription>Junte-se à plataforma e aprimore sua disciplina.</CardDescription>

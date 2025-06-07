@@ -15,7 +15,8 @@ import {
   SidebarFooter,
   useSidebar as useUiSidebar,
 } from '@/components/ui/sidebar';
-import { LeafIcon, LogOut, PanelLeftClose, PanelLeftOpen, Users, Lock } from 'lucide-react';
+import { SharkIcon } from '@/components/icons/shark-icon'; // Updated import
+import { LogOut, PanelLeftClose, PanelLeftOpen, Users, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { auth, signOut as firebaseSignOut } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -34,6 +35,7 @@ const premiumNavHrefs = [
   '/daily-plan',
   '/ai-psychologist',
   '/risk-manager',
+  '/trader-profile-test', // Added new premium page
 ];
 
 export function AppSidebar() {
@@ -77,9 +79,9 @@ export function AppSidebar() {
     >
       <SidebarHeader className="p-4 border-b border-sidebar-border">
         <Link href="/dashboard" className="flex items-center gap-2 group">
-          <LeafIcon className="h-7 w-7 text-sidebar-primary group-data-[collapsible=icon]:h-6 group-data-[collapsible=icon]:w-6 transition-all" />
+          <SharkIcon className="h-7 w-7 text-sidebar-primary group-data-[collapsible=icon]:h-6 group-data-[collapsible=icon]:w-6 transition-all" />
           <span className="font-bold text-xl font-headline text-sidebar-foreground group-data-[collapsible=icon]:hidden transition-opacity duration-300">
-            Trader's Cockpit
+            Tubarões da Bolsa
           </span>
         </Link>
       </SidebarHeader>

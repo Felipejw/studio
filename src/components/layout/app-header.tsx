@@ -4,7 +4,8 @@
 import Link from 'next/link';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { LeafIcon, Loader2, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { SharkIcon } from '@/components/icons/shark-icon'; // Updated import
+import { Loader2, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { useDashboardHeader } from '@/contexts/dashboard-header-context';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -46,9 +47,9 @@ export function AppHeader() {
       <div className="container flex h-14 items-center">
         <div className="mr-4 hidden md:flex">
           <Link href="/dashboard" className="mr-6 flex items-center space-x-2">
-            <LeafIcon className="h-6 w-6 text-primary" />
+            <SharkIcon className="h-6 w-6 text-primary" />
             <span className="hidden font-bold sm:inline-block font-headline">
-              Trader's Cockpit
+              Tubarões da Bolsa
             </span>
           </Link>
         </div>

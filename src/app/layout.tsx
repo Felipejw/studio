@@ -7,7 +7,7 @@ import { AuthProvider } from '@/components/auth-provider';
 
 
 export const metadata: Metadata = {
-  title: "Trader's Cockpit",
+  title: "Tubarões da Bolsa",
   description: 'Sua plataforma completa para trading com disciplina e clareza.',
 };
 
