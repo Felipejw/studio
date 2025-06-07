@@ -132,6 +132,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } else {
       if (isPublicPage) {
         router.replace('/dashboard');
+      } else if (pathname === '/') { // If user is authenticated and on the root page, redirect to dashboard
+        router.replace('/dashboard');
       }
     }
   }, [user, combinedLoading, router, pathname]);
