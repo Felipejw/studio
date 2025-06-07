@@ -3,6 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import Image from 'next/image'; // Import next/image
 import { cn } from '@/lib/utils';
 import { navItems as allNavItems } from '@/config/nav'; 
 import {
@@ -15,7 +16,7 @@ import {
   SidebarFooter,
   useSidebar as useUiSidebar,
 } from '@/components/ui/sidebar';
-import { SharkIcon } from '@/components/icons/shark-icon'; // Updated import
+// SharkIcon não é mais necessário aqui
 import { LogOut, PanelLeftClose, PanelLeftOpen, Users, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { auth, signOut as firebaseSignOut } from '@/lib/firebase';
@@ -35,7 +36,7 @@ const premiumNavHrefs = [
   '/daily-plan',
   '/ai-psychologist',
   '/risk-manager',
-  '/trader-profile-test', // Added new premium page
+  '/trader-profile-test', 
 ];
 
 export function AppSidebar() {
@@ -79,7 +80,14 @@ export function AppSidebar() {
     >
       <SidebarHeader className="p-4 border-b border-sidebar-border">
         <Link href="/dashboard" className="flex items-center gap-2 group">
-          <SharkIcon className="h-7 w-7 text-sidebar-primary group-data-[collapsible=icon]:h-6 group-data-[collapsible=icon]:w-6 transition-all" />
+          <Image 
+            src="/logo-tubaroes-da-bolsa.png" 
+            alt="Tubarões da Bolsa Logo" 
+            width={28} // Ajuste o tamanho conforme necessário
+            height={28}
+            className="group-data-[collapsible=icon]:w-6 group-data-[collapsible=icon]:h-6 transition-all"
+            data-ai-hint="company logo"
+          />
           <span className="font-bold text-xl font-headline text-sidebar-foreground group-data-[collapsible=icon]:hidden transition-opacity duration-300">
             Tubarões da Bolsa
           </span>

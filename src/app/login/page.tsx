@@ -5,6 +5,7 @@ import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
+import Image from 'next/image'; // Import next/image
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -13,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { signInWithEmailAndPassword, auth } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { SharkIcon } from '@/components/icons/shark-icon'; // Updated import
+// SharkIcon não é mais necessário aqui
 import { Loader2 } from 'lucide-react';
 
 const loginSchema = z.object({
@@ -58,7 +59,13 @@ export default function LoginPage() {
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="text-center">
           <Link href="/" className="mb-4 inline-flex items-center justify-center space-x-2">
-            <SharkIcon className="h-10 w-10 text-primary" />
+            <Image 
+              src="/logo-tubaroes-da-bolsa.png" 
+              alt="Tubarões da Bolsa Logo" 
+              width={40} // Ajuste o tamanho conforme necessário
+              height={40}
+              data-ai-hint="company logo"
+            />
              <span className="text-2xl font-bold font-headline">Tubarões da Bolsa</span>
           </Link>
           <CardTitle className="text-2xl font-headline">Acessar Plataforma</CardTitle>
