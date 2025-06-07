@@ -13,7 +13,7 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
-export const GetTraderProfileSuggestionsInputSchema = z.object({
+const GetTraderProfileSuggestionsInputSchema = z.object({
   preferredFrequency: z.enum(['muito_frequente', 'frequente', 'as_vezes', 'raramente'], {description: "Com que frequência prefere operar? (Muito Frequente: Várias vezes ao dia / Frequente: Algumas vezes ao dia / Às Vezes: Algumas vezes por semana / Raramente)"}),
   timeHorizon: z.enum(['minutos', 'horas', 'dias', 'semanas'], {description: "Horizonte de tempo preferido para uma operação? (Minutos, Horas, Dias, Semanas)"}),
   riskPerTradePercent: z.number().min(0.5).max(5).describe("Percentual do capital confortável em arriscar por operação? (0.5 a 5%)"),
@@ -26,7 +26,7 @@ export const GetTraderProfileSuggestionsInputSchema = z.object({
 
 export type GetTraderProfileSuggestionsInput = z.infer<typeof GetTraderProfileSuggestionsInputSchema>;
 
-export const GetTraderProfileSuggestionsOutputSchema = z.object({
+const GetTraderProfileSuggestionsOutputSchema = z.object({
   traderProfileType: z.string().describe("O tipo de perfil de trader identificado (ex: Scalper, Day Trader Direcional, Position Trader, Trader Comportamental, etc.)."),
   profileDescription: z.string().describe("Uma breve descrição das características do perfil identificado."),
   suggestedSetups: z.array(z.string()).describe("Lista de setups de trading ou estratégias mais adequadas para este perfil."),

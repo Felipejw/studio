@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod'; // Import z from zod
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
@@ -18,11 +19,23 @@ import Link from 'next/link';
 import { 
   getTraderProfileSuggestions, 
   type GetTraderProfileSuggestionsInput, 
-  type GetTraderProfileSuggestionsOutput,
-  GetTraderProfileSuggestionsInputSchema 
+  type GetTraderProfileSuggestionsOutput
+  // GetTraderProfileSuggestionsInputSchema is no longer imported
 } from '@/ai/flows/get-trader-profile-suggestions';
 
-type TraderProfileTestFormValues = GetTraderProfileSuggestionsInput;
+// Define the form schema locally for client-side validation
+const formSchema = z.object({
+  preferredFrequency: z.enum(['muito_frequente', 'frequente', 'as_vezes', 'raramente']),
+  timeHorizon: z.enum(['minutos', 'horas', 'dias', 'semanas']),
+  riskPerTradePercent: z.number().min(0.5, {message: "Risco mínimo de 0.5%"}).max(5, {message: "Risco máximo de 5%"}),
+  reactionToLossStreak: z.enum(['calmo_plano', 'ansioso_continua', 'para_um_tempo', 'tenta_recuperar_rapido']),
+  impulsivenessScale: z.number().min(0).max(10),
+  decisionBasis: z.enum(['analise_tecnica', 'analise_fundamentalista', 'sentimento_mercado', 'misto']),
+  experienceLevel: z.enum(['iniciante', 'intermediario', 'avancado']),
+  preferredMarketTime: z.enum(['abertura', 'meio_pregao', 'fechamento', 'qualquer_horario', 'fora_horario_comercial']),
+});
+
+type TraderProfileTestFormValues = GetTraderProfileSuggestionsInput; // This type is still valid
 
 function AccessDeniedPremium() {
   return (
@@ -57,7 +70,7 @@ export default function TraderProfileTestPage() {
   const { user, userId, userProfile, loading: authLoading, profileLoading } = useAuth();
 
   const form = useForm<TraderProfileTestFormValues>({
-    resolver: zodResolver(GetTraderProfileSuggestionsInputSchema),
+    resolver: zodResolver(formSchema), // Use the locally defined formSchema
     defaultValues: {
       preferredFrequency: 'frequente',
       timeHorizon: 'horas',
