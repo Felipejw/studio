@@ -3,7 +3,6 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-// Image component is no longer needed here
 import { cn } from '@/lib/utils';
 import { navItems as allNavItems } from '@/config/nav'; 
 import {
@@ -16,7 +15,7 @@ import {
   SidebarFooter,
   useSidebar as useUiSidebar,
 } from '@/components/ui/sidebar';
-import { LogOut, PanelLeftClose, PanelLeftOpen, Users, Lock, Webhook } from 'lucide-react'; // Added Webhook
+import { LogOut, PanelLeftClose, PanelLeftOpen, Users, Lock, Webhook, Settings2 } from 'lucide-react'; 
 import { Button } from '@/components/ui/button';
 import { auth, signOut as firebaseSignOut } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -25,16 +24,10 @@ import React from 'react';
 
 const adminNavItems = [
   {
-    title: 'Admin Usuários',
-    href: '/admin/users',
-    icon: Users,
-    label: 'Gerenciar Usuários',
-  },
-  {
-    title: 'Config. Webhook',
-    href: '/admin/webhook-info',
-    icon: Webhook, // Using Webhook icon
-    label: 'Informações do Webhook',
+    title: 'Painel Admin',
+    href: '/admin',
+    icon: Settings2, // Icon for the main admin panel
+    label: 'Administração Geral',
   }
 ];
 
@@ -150,11 +143,11 @@ export function AppSidebar() {
                       size="default"
                       className={cn(
                         "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                        pathname === adminItem.href
+                         pathname.startsWith('/admin') && adminItem.href === '/admin' // Highlight if on any /admin/* page
                           ? 'bg-sidebar-primary text-sidebar-primary-foreground font-semibold shadow-sm'
                           : 'text-sidebar-foreground/80 hover:text-sidebar-accent-foreground'
                       )}
-                      isActive={pathname === adminItem.href}
+                      isActive={pathname.startsWith('/admin') && adminItem.href === '/admin'}
                       tooltip={{
                         children: adminItem.title,
                         className: "bg-sidebar-background text-sidebar-foreground border-sidebar-border"

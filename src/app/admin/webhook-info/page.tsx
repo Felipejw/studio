@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth-provider';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, ArrowLeft, Info, KeyRound, Terminal } from 'lucide-react';
+import { Loader2, ArrowLeft, Info, KeyRound, Terminal, Settings2 } from 'lucide-react';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 
@@ -17,7 +17,7 @@ export default function WebhookInfoPage() {
   const { toast } = useToast();
 
   const webhookUrl = typeof window !== 'undefined' ? `${window.location.origin}/api/webhookKirvano` : '/api/webhookKirvano';
-  const secretToken = "MEU_TOKEN_SECRETO"; // Este deve vir de uma variável de ambiente em produção
+  const secretToken = "MEU_TOKEN_SECRETO"; 
 
   useEffect(() => {
     const overallLoading = authLoading || profileLoading;
@@ -47,13 +47,13 @@ export default function WebhookInfoPage() {
       <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto flex h-14 items-center justify-between px-4 md:px-6">
           <div className="flex items-center space-x-2">
-            <Info className="h-6 w-6 text-primary" />
+            <Webhook className="h-6 w-6 text-primary" />
             <h1 className="text-xl font-bold font-headline">Informações do Webhook Kirvano</h1>
           </div>
           <Button variant="outline" asChild>
-            <Link href="/admin/users">
+            <Link href="/admin">
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Voltar para Admin Usuários
+              Voltar ao Painel Admin
             </Link>
           </Button>
         </div>

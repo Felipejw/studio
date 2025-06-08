@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { Loader2, ShieldAlert, Users, ArrowLeft, Phone, Fingerprint, Edit, Trash2, CalendarIcon, Clock } from 'lucide-react'; // Added Clock
+import { Loader2, ShieldAlert, Users, ArrowLeft, Phone, Fingerprint, Edit, Trash2, CalendarIcon, Clock, Settings2 } from 'lucide-react'; 
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { format, parseISO } from 'date-fns';
@@ -33,20 +33,20 @@ type UserPlan = AuthUserPlan;
 interface UserProfileDataFirestore extends Omit<AuthUserProfileData, 'memberSince' | 'lastPayment' | 'plan_updated_at'> {
   memberSince?: Timestamp;
   lastPayment?: Timestamp;
-  plan_updated_at?: Timestamp; // Added for Firestore
+  plan_updated_at?: Timestamp; 
 }
 
 
 interface UserProfileAdminView extends Omit<UserProfileDataFirestore, 'memberSince' | 'lastPayment' | 'plan_updated_at'> {
-  id: string; // Firestore document ID
-  email: string; // Ensure email is always present
-  name: string; // Ensure name is always present
-  plan: UserPlan; // Ensure plan is always present
+  id: string; 
+  email: string; 
+  name: string; 
+  plan: UserPlan; 
   memberSinceDisplay?: string | null;
   lastPaymentDisplay?: string | null; 
   originalLastPayment?: Timestamp | null; 
-  planUpdatedAtDisplay?: string | null; // New for display
-  originalPlanUpdatedAt?: Timestamp | null; // New for potential editing
+  planUpdatedAtDisplay?: string | null; 
+  originalPlanUpdatedAt?: Timestamp | null; 
   whatsapp: string; 
   cpf: string; 
 }
@@ -54,11 +54,10 @@ interface UserProfileAdminView extends Omit<UserProfileDataFirestore, 'memberSin
 
 const editUserSchema = z.object({
   name: z.string().min(2, { message: "Nome deve ter pelo menos 2 caracteres." }),
-  email: z.string().email({ message: "Email inválido." }), // Remains disabled in form
+  email: z.string().email({ message: "Email inválido." }), 
   whatsapp: z.string().optional(),
   cpf: z.string().optional(),
-  lastPayment: z.string().optional(), // Date string from input type="date" e.g., "YYYY-MM-DD"
-  // plan_updated_at is not directly editable in this form, managed by webhook
+  lastPayment: z.string().optional(), 
 });
 
 type EditUserFormValues = z.infer<typeof editUserSchema>;
@@ -147,7 +146,7 @@ export default function AdminUsersPage() {
         prevUsers.map(u => (u.id === userIdToUpdate ? { 
             ...u, 
             plan: newPlan, 
-            plan_updated_at: planUpdatedAt, // Update Timestamp object locally
+            plan_updated_at: planUpdatedAt, 
             planUpdatedAtDisplay: planUpdatedAt.toDate().toLocaleDateString('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
             ...(newPlan === 'premium' && { lastPayment: planUpdatedAt, lastPaymentDisplay: planUpdatedAt.toDate().toLocaleDateString('pt-BR')})
         } : u))
@@ -190,7 +189,7 @@ export default function AdminUsersPage() {
 
       if (data.lastPayment) {
         try {
-            const parsedDate = parseISO(data.lastPayment); // YYYY-MM-DD
+            const parsedDate = parseISO(data.lastPayment); 
             newLastPaymentTimestamp = Timestamp.fromDate(parsedDate);
         } catch (e) {
             toast({ variant: "destructive", title: "Data Inválida", description: "O formato da data de último pagamento é inválido." });
@@ -198,7 +197,7 @@ export default function AdminUsersPage() {
             return;
         }
       } else {
-        newLastPaymentTimestamp = null; // Clear the date
+        newLastPaymentTimestamp = null; 
       }
       
       const updatePayload: any = {
@@ -207,7 +206,6 @@ export default function AdminUsersPage() {
         cpf: data.cpf || '',
         lastPayment: newLastPaymentTimestamp,
       };
-      // If lastPayment is updated, also update plan_updated_at for consistency if current plan is premium
       if (newLastPaymentTimestamp && editingUser.plan === 'premium') {
         updatePayload.plan_updated_at = newLastPaymentTimestamp;
       }
@@ -310,12 +308,12 @@ export default function AdminUsersPage() {
         <div className="container mx-auto flex h-14 items-center justify-between px-4 md:px-6">
           <div className="flex items-center space-x-2">
             <Users className="h-6 w-6 text-primary" />
-            <h1 className="text-xl font-bold font-headline">Painel Administrativo - Usuários</h1>
+            <h1 className="text-xl font-bold font-headline">Gerenciar Usuários</h1>
           </div>
           <Button variant="outline" asChild>
-            <Link href="/dashboard">
+            <Link href="/admin">
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Voltar ao Dashboard
+              Voltar ao Painel Admin
             </Link>
           </Button>
         </div>
@@ -323,7 +321,7 @@ export default function AdminUsersPage() {
       <main className="container mx-auto py-8 px-4 md:px-6">
         <Card>
           <CardHeader>
-            <CardTitle>Gerenciar Usuários</CardTitle>
+            <CardTitle>Lista de Usuários</CardTitle>
             <CardDescription>Visualize e gerencie os usuários da plataforma.</CardDescription>
           </CardHeader>
           <CardContent>
