@@ -39,7 +39,7 @@ const premiumNavHrefs = [
   '/risk-manager',
   '/trader-profile-test', 
   '/strategy-builder',
-  '/trader-groups', // Added trader-groups here
+  '/trader-groups',
 ];
 
 export function AppSidebar() {
@@ -56,8 +56,9 @@ export function AppSidebar() {
 
   const navItemsToRender = allNavItems.map(item => {
     const isPremiumFeature = premiumNavHrefs.includes(item.href);
-    const isDisabled = isPremiumFeature && currentUserPlan === 'free' && !isAdmin; // Admins can access all
-    return { ...item, isDisabled };
+    // isDisabled now primarily controls the lock icon and specific styling, not clickability for premium items.
+    const isDisabledForDisplay = isPremiumFeature && currentUserPlan === 'free' && !isAdmin; 
+    return { ...item, isDisabledForDisplay };
   });
 
   const handleSignOut = async () => {
@@ -94,32 +95,25 @@ export function AppSidebar() {
         <SidebarMenu>
           {navItemsToRender.map((item) => (
             <SidebarMenuItem key={item.href} className="px-2">
-              <Link href={item.isDisabled ? '#' : item.href} passHref legacyBehavior>
+              <Link href={item.href} passHref legacyBehavior>
                 <SidebarMenuButton
                   variant="default"
                   size="default"
                   className={cn(
-                    "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                    pathname === item.href && !item.isDisabled
+                    "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground", // Base hover for all
+                    pathname === item.href && !item.isDisabledForDisplay // Active style only if NOT display-disabled
                       ? 'bg-sidebar-primary text-sidebar-primary-foreground font-semibold shadow-sm'
-                      : 'text-sidebar-foreground/80 hover:text-sidebar-accent-foreground',
-                    item.isDisabled && 'opacity-50 cursor-not-allowed hover:bg-transparent hover:text-sidebar-foreground/80'
+                      : 'text-sidebar-foreground/80', // Base for inactive or display-disabled items
+                    item.isDisabledForDisplay && 'opacity-75' // Apply opacity if it's a premium feature for a free user
                   )}
-                  isActive={pathname === item.href && !item.isDisabled}
+                  isActive={pathname === item.href && !item.isDisabledForDisplay}
                   tooltip={{
-                    children: item.isDisabled ? `${item.title} (Premium)` : item.title,
+                    children: item.isDisabledForDisplay ? `${item.title} (Premium)` : item.title,
                     className: "bg-sidebar-background text-sidebar-foreground border-sidebar-border"
                   }}
                   aria-label={item.title}
-                  disabled={item.isDisabled}
-                  onClick={(e) => {
-                     if (item.isDisabled) {
-                       e.preventDefault();
-                       toast({ title: "Recurso Premium", description: "Faça upgrade para o Plano Premium para acessar.", duration: 3000});
-                       if (isMobile && typeof setOpenMobile === 'function') setOpenMobile(false);
-                       router.push('/pricing'); // Optionally redirect
-                       return;
-                     }
+                  // Button is no longer disabled by this logic, click navigates to page
+                  onClick={() => {
                      if (isMobile && typeof setOpenMobile === 'function' && user) {
                         setOpenMobile(false);
                      }
@@ -128,7 +122,7 @@ export function AppSidebar() {
                   <item.icon className="h-5 w-5" />
                   <span className="group-data-[collapsible=icon]:hidden flex items-center">
                     {item.title}
-                    {item.isDisabled && <Lock className="ml-2 h-3 w-3 text-amber-500" />}
+                    {item.isDisabledForDisplay && <Lock className="ml-2 h-3 w-3 text-amber-500" />}
                   </span>
                 </SidebarMenuButton>
               </Link>
@@ -145,7 +139,7 @@ export function AppSidebar() {
                       size="default"
                       className={cn(
                         "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                         pathname.startsWith('/admin') && adminItem.href === '/admin' // Highlight if on any /admin/* page
+                         pathname.startsWith('/admin') && adminItem.href === '/admin' 
                           ? 'bg-sidebar-primary text-sidebar-primary-foreground font-semibold shadow-sm'
                           : 'text-sidebar-foreground/80 hover:text-sidebar-accent-foreground'
                       )}
