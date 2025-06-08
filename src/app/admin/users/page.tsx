@@ -17,11 +17,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { Loader2, ShieldAlert, Users, ArrowLeft, Phone, Fingerprint, Edit, Trash2, CalendarIcon } from 'lucide-react';
+import { Loader2, ShieldAlert, Users, ArrowLeft, Phone, Fingerprint, Edit, Trash2, CalendarIcon, Clock } from 'lucide-react'; // Added Clock
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { format, parseISO } from 'date-fns';
-import { ptBR } from 'date-fns/locale'; // Added import for ptBR
+import { ptBR } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
@@ -30,15 +30,27 @@ import { cn } from "@/lib/utils";
 type UserPlan = AuthUserPlan;
 
 // Use UserProfileData from auth-provider for Firestore structure
-interface UserProfileDataFirestore extends AuthUserProfileData {}
-
-interface UserProfileAdminView extends Omit<UserProfileDataFirestore, 'memberSince' | 'lastPayment'> {
-  id: string; // Firestore document ID
-  lastPaymentDisplay?: string | null; // Formatted date string for display
-  originalLastPayment?: Timestamp | null; // Original Timestamp for editing
-  whatsapp: string; // Ensure it's always string, 'N/A' if not present
-  cpf: string; // Ensure it's always string, 'N/A' if not present
+interface UserProfileDataFirestore extends Omit<AuthUserProfileData, 'memberSince' | 'lastPayment' | 'plan_updated_at'> {
+  memberSince?: Timestamp;
+  lastPayment?: Timestamp;
+  plan_updated_at?: Timestamp; // Added for Firestore
 }
+
+
+interface UserProfileAdminView extends Omit<UserProfileDataFirestore, 'memberSince' | 'lastPayment' | 'plan_updated_at'> {
+  id: string; // Firestore document ID
+  email: string; // Ensure email is always present
+  name: string; // Ensure name is always present
+  plan: UserPlan; // Ensure plan is always present
+  memberSinceDisplay?: string | null;
+  lastPaymentDisplay?: string | null; 
+  originalLastPayment?: Timestamp | null; 
+  planUpdatedAtDisplay?: string | null; // New for display
+  originalPlanUpdatedAt?: Timestamp | null; // New for potential editing
+  whatsapp: string; 
+  cpf: string; 
+}
+
 
 const editUserSchema = z.object({
   name: z.string().min(2, { message: "Nome deve ter pelo menos 2 caracteres." }),
@@ -46,6 +58,7 @@ const editUserSchema = z.object({
   whatsapp: z.string().optional(),
   cpf: z.string().optional(),
   lastPayment: z.string().optional(), // Date string from input type="date" e.g., "YYYY-MM-DD"
+  // plan_updated_at is not directly editable in this form, managed by webhook
 });
 
 type EditUserFormValues = z.infer<typeof editUserSchema>;
@@ -84,18 +97,24 @@ export default function AdminUsersPage() {
       const fetchUsers = async () => {
         setIsLoadingUsers(true);
         try {
-          const usersQuery = query(collection(db, 'users'), firestoreOrderBy('name', 'asc')); // Order by name
+          const usersQuery = query(collection(db, 'users'), firestoreOrderBy('name', 'asc'));
           const querySnapshot = await getDocs(usersQuery);
           const fetchedUsers: UserProfileAdminView[] = [];
           querySnapshot.forEach((docSnap) => {
             const data = docSnap.data() as UserProfileDataFirestore;
             fetchedUsers.push({
-              ...data,
               id: docSnap.id,
-              lastPaymentDisplay: data.lastPayment ? (data.lastPayment instanceof Timestamp ? data.lastPayment.toDate().toLocaleDateString('pt-BR') : String(data.lastPayment)) : 'N/A',
-              originalLastPayment: data.lastPayment instanceof Timestamp ? data.lastPayment : null,
+              uid: data.uid,
+              name: data.name || 'Nome não disponível',
+              email: data.email || 'Email não disponível',
+              plan: data.plan || 'free',
               whatsapp: data.whatsapp || 'N/A',
               cpf: data.cpf || 'N/A',
+              memberSinceDisplay: data.memberSince ? (data.memberSince instanceof Timestamp ? data.memberSince.toDate().toLocaleDateString('pt-BR') : String(data.memberSince)) : 'N/A',
+              lastPaymentDisplay: data.lastPayment ? (data.lastPayment instanceof Timestamp ? data.lastPayment.toDate().toLocaleDateString('pt-BR') : String(data.lastPayment)) : 'N/A',
+              originalLastPayment: data.lastPayment instanceof Timestamp ? data.lastPayment : null,
+              planUpdatedAtDisplay: data.plan_updated_at ? (data.plan_updated_at instanceof Timestamp ? data.plan_updated_at.toDate().toLocaleDateString('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : String(data.plan_updated_at)) : 'N/A',
+              originalPlanUpdatedAt: data.plan_updated_at instanceof Timestamp ? data.plan_updated_at : null,
             });
           });
           setUsersList(fetchedUsers);
@@ -113,9 +132,25 @@ export default function AdminUsersPage() {
     setIsUpdatingPlan(userIdToUpdate);
     try {
       const userDocRef = doc(db, 'users', userIdToUpdate);
-      await updateDoc(userDocRef, { plan: newPlan });
+      const planUpdatedAt = Timestamp.fromDate(new Date());
+      const updateData: { plan: UserPlan, plan_updated_at: Timestamp, lastPayment?: Timestamp } = {
+         plan: newPlan,
+         plan_updated_at: planUpdatedAt
+      };
+      if (newPlan === 'premium') {
+        updateData.lastPayment = planUpdatedAt;
+      }
+
+      await updateDoc(userDocRef, updateData);
+      
       setUsersList(prevUsers =>
-        prevUsers.map(u => (u.id === userIdToUpdate ? { ...u, plan: newPlan } : u))
+        prevUsers.map(u => (u.id === userIdToUpdate ? { 
+            ...u, 
+            plan: newPlan, 
+            plan_updated_at: planUpdatedAt, // Update Timestamp object locally
+            planUpdatedAtDisplay: planUpdatedAt.toDate().toLocaleDateString('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
+            ...(newPlan === 'premium' && { lastPayment: planUpdatedAt, lastPaymentDisplay: planUpdatedAt.toDate().toLocaleDateString('pt-BR')})
+        } : u))
       );
       toast({ title: 'Plano Atualizado!', description: `Plano do usuário alterado para ${newPlan === 'premium' ? 'Premium' : 'Gratuito'}.` });
     } catch (error) {
@@ -165,13 +200,20 @@ export default function AdminUsersPage() {
       } else {
         newLastPaymentTimestamp = null; // Clear the date
       }
-
-      await updateDoc(userDocRef, {
+      
+      const updatePayload: any = {
         name: data.name,
         whatsapp: data.whatsapp || '',
         cpf: data.cpf || '',
         lastPayment: newLastPaymentTimestamp,
-      });
+      };
+      // If lastPayment is updated, also update plan_updated_at for consistency if current plan is premium
+      if (newLastPaymentTimestamp && editingUser.plan === 'premium') {
+        updatePayload.plan_updated_at = newLastPaymentTimestamp;
+      }
+
+
+      await updateDoc(userDocRef, updatePayload);
 
       setUsersList(prevUsers =>
         prevUsers.map(u =>
@@ -183,6 +225,10 @@ export default function AdminUsersPage() {
                 cpf: data.cpf || 'N/A',
                 lastPaymentDisplay: newLastPaymentTimestamp ? newLastPaymentTimestamp.toDate().toLocaleDateString('pt-BR') : 'N/A',
                 originalLastPayment: newLastPaymentTimestamp,
+                ...(newLastPaymentTimestamp && u.plan === 'premium' && {
+                    planUpdatedAtDisplay: newLastPaymentTimestamp.toDate().toLocaleDateString('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
+                    originalPlanUpdatedAt: newLastPaymentTimestamp,
+                })
               }
             : u
         )
@@ -212,21 +258,18 @@ export default function AdminUsersPage() {
 
       const batch = writeBatch(db);
 
-      // Delete from user-specific ID collections first
       const riskConfigRef = doc(db, 'risk_config', userIdToDelete);
       const riskConfigSnap = await getDoc(riskConfigRef);
       if (riskConfigSnap.exists()) {
         batch.delete(riskConfigRef);
       }
       
-      // Batch delete from other collections
       for (const colInfo of collectionsToDeleteFrom) {
         const q = query(collection(db, colInfo.name), where(colInfo.field, "==", userIdToDelete));
         const snapshot = await getDocs(q);
         snapshot.forEach(docSnap => batch.delete(docSnap.ref));
       }
 
-      // Delete the main user document
       const userDocRef = doc(db, 'users', userIdToDelete);
       batch.delete(userDocRef);
 
@@ -302,6 +345,7 @@ export default function AdminUsersPage() {
                       <TableHead><Fingerprint className="inline mr-1 h-4 w-4" />CPF</TableHead>
                       <TableHead>Plano Atual</TableHead>
                       <TableHead>Último Pagamento</TableHead>
+                      <TableHead><Clock className="inline mr-1 h-4 w-4" />Plano Atualizado Em</TableHead>
                       <TableHead className="text-center">Alterar Plano</TableHead>
                       <TableHead className="text-center">Ações</TableHead>
                     </TableRow>
@@ -315,6 +359,7 @@ export default function AdminUsersPage() {
                         <TableCell>{u.cpf}</TableCell>
                         <TableCell className="capitalize">{u.plan === 'premium' ? 'Premium' : 'Gratuito'}</TableCell>
                         <TableCell>{u.lastPaymentDisplay}</TableCell>
+                        <TableCell>{u.planUpdatedAtDisplay}</TableCell>
                         <TableCell className="text-center w-[180px]">
                           {isUpdatingPlan === u.id ? (
                             <Loader2 className="h-5 w-5 animate-spin mx-auto" />
@@ -506,4 +551,3 @@ export default function AdminUsersPage() {
     </div>
   );
 }
-

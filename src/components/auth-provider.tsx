@@ -19,6 +19,7 @@ export interface UserProfileData {
   plan: UserPlan;
   memberSince: string; // Consistent ISO string
   lastPayment?: string; // Consistent ISO string or undefined
+  plan_updated_at?: string; // New: Consistent ISO string or undefined
 }
 
 interface AuthContextType {
@@ -56,7 +57,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           const userDocRef = doc(db, "users", currentUser.uid);
           const docSnap = await getDoc(userDocRef);
           if (docSnap.exists()) {
-            const profileData = docSnap.data() as Omit<UserProfileData, 'memberSince' | 'lastPayment'> & { memberSince?: Timestamp | string, lastPayment?: Timestamp | string };
+            const profileData = docSnap.data() as Omit<UserProfileData, 'memberSince' | 'lastPayment' | 'plan_updated_at'> & { memberSince?: Timestamp | string, lastPayment?: Timestamp | string, plan_updated_at?: Timestamp | string };
             
             let memberSinceStr: string;
             if (profileData.memberSince instanceof Timestamp) {
@@ -79,6 +80,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
               }
             }
 
+            let planUpdatedAtStr: string | undefined = undefined;
+            if (profileData.plan_updated_at) {
+              if (profileData.plan_updated_at instanceof Timestamp) {
+                planUpdatedAtStr = profileData.plan_updated_at.toDate().toISOString();
+              } else if (typeof profileData.plan_updated_at === 'string' && !isNaN(new Date(profileData.plan_updated_at).getTime())) {
+                planUpdatedAtStr = new Date(profileData.plan_updated_at).toISOString();
+              } else {
+                 console.warn(`AuthProvider: plan_updated_at for user ${currentUser.uid} is not a valid Timestamp or date string. Setting to undefined. Value:`, profileData.plan_updated_at);
+              }
+            }
+
             setUserProfile({
               uid: profileData.uid,
               name: profileData.name,
@@ -88,6 +100,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
               plan: profileData.plan,
               memberSince: memberSinceStr,
               lastPayment: lastPaymentStr,
+              plan_updated_at: planUpdatedAtStr,
             });
 
           } else {
