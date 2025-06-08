@@ -38,7 +38,8 @@ const premiumNavHrefs = [
   '/ai-psychologist',
   '/risk-manager',
   '/trader-profile-test', 
-  '/strategy-builder', // Added strategy-builder here
+  '/strategy-builder',
+  '/trader-groups', // Added trader-groups here
 ];
 
 export function AppSidebar() {

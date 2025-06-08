@@ -7,10 +7,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { MessageSquare, Loader2 } from 'lucide-react';
+import { MessageSquare, Loader2, ShieldAlert } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuth } from '@/components/auth-provider';
 import { db, collection, addDoc, getDocs, query, where, orderBy, Timestamp } from '@/lib/firebase';
+import Link from 'next/link';
 
 interface MessageData {
   groupId: 'índice' | 'dólar' | 'forex';
@@ -23,6 +24,32 @@ interface MessageData {
 interface Message extends Omit<MessageData, 'timestamp'> {
   id: string;
   timestamp: Date; // Convert Firestore Timestamp to Date for display
+}
+
+function AccessDeniedPremium() {
+  return (
+    <div className="container mx-auto py-12 flex justify-center items-center">
+      <Card className="w-full max-w-md text-center shadow-lg">
+        <CardHeader>
+          <div className="mx-auto bg-destructive/10 p-3 rounded-full w-fit">
+            <ShieldAlert className="h-10 w-10 text-destructive" />
+          </div>
+          <CardTitle className="mt-4 font-headline text-2xl">Acesso Premium Necessário</CardTitle>
+          <CardDescription>
+            Os Grupos de Discussão são exclusivos para assinantes do Plano Premium.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-6 text-sm">
+            Faça upgrade para conectar-se com outros traders, compartilhar ideias e aprender em nossas comunidades.
+          </p>
+          <Button asChild size="lg" className="w-full">
+            <Link href="/pricing">Ver Planos Premium</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
 
 function GroupContent({ groupName, assetType }: { groupName: string, assetType: 'índice' | 'dólar' | 'forex' }) {
@@ -162,6 +189,25 @@ function GroupContent({ groupName, assetType }: { groupName: string, assetType: 
 }
 
 export default function TraderGroupsPage() {
+  const { user, userProfile, loading: authLoading, profileLoading } = useAuth();
+
+  const isLoading = authLoading || profileLoading;
+
+  if (isLoading) {
+    return (
+      <div className="flex h-[calc(100vh-200px)] w-full items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="ml-3">Carregando...</p>
+      </div>
+    );
+  }
+
+  if (!user) return null; // AuthProvider handles redirect
+
+  if (userProfile?.plan !== 'premium' && userProfile?.email !== 'felipejw.fm@gmail.com') { // Admin override for testing
+    return <AccessDeniedPremium />;
+  }
+
   return (
     <div className="container mx-auto py-8">
       <div className="mb-6 text-center md:text-left">
@@ -169,7 +215,7 @@ export default function TraderGroupsPage() {
         <p className="text-lg text-muted-foreground mt-1">Conecte-se, compartilhe ideias e aprenda com outros traders.</p>
       </div>
 
-      <Tabs defaultValue="indice" className="w-full">
+      <Tabs defaultValue="índice" className="w-full">
         <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 md:w-auto md:inline-flex mb-6 bg-muted p-1 rounded-lg shadow-sm">
           <TabsTrigger value="índice" className="px-4 py-2.5 text-sm">Mini Índice (WIN)</TabsTrigger>
           <TabsTrigger value="dólar" className="px-4 py-2.5 text-sm">Mini Dólar (WDO)</TabsTrigger>
@@ -188,3 +234,4 @@ export default function TraderGroupsPage() {
     </div>
   );
 }
+
