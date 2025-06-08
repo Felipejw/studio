@@ -1,6 +1,6 @@
 
 import type { LucideIcon } from 'lucide-react';
-import { LayoutDashboard, FileText, BookOpenText, Brain, Gauge, User, DollarSign, Users as GroupsIcon, ClipboardList, Handshake } from 'lucide-react';
+import { LayoutDashboard, FileText, BookOpenText, Brain, Gauge, User, DollarSign, Users as GroupsIcon, ClipboardList, Handshake, BrainCircuit } from 'lucide-react';
 
 export interface NavItem {
   title: string;
@@ -28,6 +28,12 @@ export const navItems: NavItem[] = [
     href: '/trade-log',
     icon: BookOpenText,
     label: 'Diário de Operações',
+  },
+  {
+    title: 'Construtor de Estratégias',
+    href: '/strategy-builder',
+    icon: BrainCircuit,
+    label: 'Criar Setup com IA',
   },
   {
     title: 'Psicólogo Virtual',
@@ -72,3 +78,4 @@ export const navItems: NavItem[] = [
     label: 'Seu Perfil e Plano',
   },
 ];
+

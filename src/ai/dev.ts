@@ -6,3 +6,5 @@ import '@/ai/flows/generate-daily-plan.ts';
 import '@/ai/flows/get-ai-psychologist-response.ts';
 import '@/ai/flows/evaluate-simulation.ts';
 import '@/ai/flows/get-trader-profile-suggestions.ts';
+import '@/ai/flows/explain-trading-setup.ts';
+
