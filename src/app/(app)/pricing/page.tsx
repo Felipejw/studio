@@ -32,8 +32,11 @@ const plans: PricingPlan[] = [
     priceFrequency: '/mês',
     description: 'Organize seus trades básicos sem custo.',
     features: [
-      'Registro de Trades',
       'Dashboard Básico',
+      'Diário de Trades',
+      'Programa de Afiliados',
+      'Visualização de Planos',
+      'Gerenciamento de Perfil',
       'Suporte Comunitário',
     ],
     icon: Star,
@@ -49,8 +52,11 @@ const plans: PricingPlan[] = [
       'Todos os recursos do Gratuito',
       'Dashboard Completo com Métricas Avançadas',
       'Plano Diário com IA',
+      'Construtor de Estratégias com IA',
       'Psicólogo Virtual com IA',
+      'Teste de Perfil de Trader com IA',
       'Gestor de Risco Detalhado',
+      'Grupos de Traders',
       'Suporte Prioritário',
     ],
     icon: ShieldCheck,
@@ -157,7 +163,7 @@ export default function PricingPage() {
         ))}
       </div>
        <div className="text-center mt-12 text-sm text-muted-foreground">
-          <p>Todos os pagamentos são processados de forma segura. Você pode cancelar ou alterar seu plano a qualquer momento (simulado).</p>
+          <p>Pagamentos seguros via Pix e Cartão de Crédito. Você pode cancelar ou alterar seu plano a qualquer momento (simulado).</p>
           <p>Dúvidas? <Link href="/contact" className="text-primary hover:underline">Entre em contato conosco</Link>.</p>
         </div>
     </div>
