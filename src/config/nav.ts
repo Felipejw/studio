@@ -18,16 +18,16 @@ export const navItems: NavItem[] = [
     label: 'Painel Principal',
   },
   {
-    title: 'Plano Diário',
-    href: '/daily-plan',
-    icon: FileText,
-    label: 'Plano Diário Inteligente',
-  },
-  {
     title: 'Diário de Trades',
     href: '/trade-log',
     icon: BookOpenText,
     label: 'Diário de Operações',
+  },
+  {
+    title: 'Plano Diário',
+    href: '/daily-plan',
+    icon: FileText,
+    label: 'Plano Diário Inteligente',
   },
   {
     title: 'Construtor de Estratégias',
