@@ -20,6 +20,7 @@ export default function ProfilePage() {
 
   const { toast } = useToast();
   const router = useRouter(); 
+  const kirvanoPremiumLink = "https://pay.kirvano.com/689ba747-0c2e-4028-88d6-032e4b7c72ab";
 
   useEffect(() => {
     if (!authProfileLoading) { 
@@ -43,6 +44,7 @@ export default function ProfilePage() {
   const handlePlanChangeNavigation = (newPlan: UserPlan) => {
     if (!userProfile || !userId) return;
     if (newPlan !== userProfile.plan) {
+      // For plans other than 'premium' or if direct external link isn't applicable
       router.push(`/checkout?planId=${newPlan}`);
     } else {
        toast({ title: "Plano Atual", description: "Você já está neste plano." });
@@ -167,13 +169,15 @@ export default function ProfilePage() {
                      <div className="flex items-center gap-2">
                        <p className="font-semibold text-lg text-primary">{userProfile.plan === 'premium' ? 'Premium' : 'Gratuito'}</p>
                         {userProfile.plan === 'free' && (
-                             <Button size="sm" variant="outline" onClick={() => handlePlanChangeNavigation('premium')}>
-                                Fazer Upgrade para Premium
+                             <Button size="sm" variant="outline" asChild>
+                                <a href={kirvanoPremiumLink} target="_blank" rel="noopener noreferrer">
+                                  Fazer Upgrade para Premium
+                                </a>
                             </Button>
                         )}
                          {userProfile.plan === 'premium' && (
-                             <Button size="sm" variant="ghost" onClick={() => router.push('/pricing')} disabled>
-                                Gerenciar Assinatura (em Planos)
+                             <Button size="sm" variant="ghost" onClick={() => router.push('/pricing')} > 
+                                Gerenciar Assinatura
                             </Button>
                         )}
                     </div>
