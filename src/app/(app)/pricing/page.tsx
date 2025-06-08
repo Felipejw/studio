@@ -21,6 +21,7 @@ interface PricingPlan {
   icon: React.ElementType;
   cta: string;
   popular?: boolean;
+  externalLink?: string; // Added for direct external links
 }
 
 const plans: PricingPlan[] = [
@@ -55,6 +56,7 @@ const plans: PricingPlan[] = [
     icon: ShieldCheck,
     cta: 'Assinar Plano Premium',
     popular: true,
+    externalLink: 'https://pay.kirvano.com/689ba747-0c2e-4028-88d6-032e4b7c72ab', // Your Kirvano link
   },
 ];
 
@@ -62,11 +64,17 @@ export default function PricingPage() {
   const { user, userProfile } = useAuth(); // userProfile for current plan check
   const router = useRouter();
 
-  const handleSelectPlan = (planId: UserPlanPricing) => {
+  const handleSelectPlan = (plan: PricingPlan) => {
+    if (plan.externalLink) {
+      // If user is not logged in, they can still go to external payment page
+      window.open(plan.externalLink, '_blank');
+      return;
+    }
+
     if (!user) {
       router.push('/login?redirect=/pricing');
     } else {
-      router.push(`/checkout?planId=${planId}`);
+      router.push(`/checkout?planId=${plan.id}`);
     }
   };
 
@@ -125,9 +133,19 @@ export default function PricingPage() {
                   >
                     Plano Atual
                   </Button>
+              ) : plan.externalLink ? (
+                <Button
+                  asChild
+                  className={`w-full text-lg py-3 ${plan.popular ? '' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}
+                  size="lg"
+                >
+                  <a href={plan.externalLink} target="_blank" rel="noopener noreferrer">
+                    {plan.cta}
+                  </a>
+                </Button>
               ) : (
                  <Button
-                    onClick={() => handleSelectPlan(plan.id)}
+                    onClick={() => handleSelectPlan(plan)}
                     className={`w-full text-lg py-3 ${plan.popular ? '' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}
                     size="lg"
                   >
