@@ -16,19 +16,28 @@ import {
   SidebarFooter,
   useSidebar as useUiSidebar,
 } from '@/components/ui/sidebar';
-import { LogOut, PanelLeftClose, PanelLeftOpen, Users, Lock } from 'lucide-react';
+import { LogOut, PanelLeftClose, PanelLeftOpen, Users, Lock, Webhook } from 'lucide-react'; // Added Webhook
 import { Button } from '@/components/ui/button';
 import { auth, signOut as firebaseSignOut } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/components/auth-provider';
 import React from 'react';
 
-const adminNavItem = {
-  title: 'Admin Usuários',
-  href: '/admin/users',
-  icon: Users,
-  label: 'Gerenciar Usuários',
-};
+const adminNavItems = [
+  {
+    title: 'Admin Usuários',
+    href: '/admin/users',
+    icon: Users,
+    label: 'Gerenciar Usuários',
+  },
+  {
+    title: 'Config. Webhook',
+    href: '/admin/webhook-info',
+    icon: Webhook, // Using Webhook icon
+    label: 'Informações do Webhook',
+  }
+];
+
 
 // Define which nav items are premium
 const premiumNavHrefs = [
@@ -131,37 +140,41 @@ export function AppSidebar() {
             </SidebarMenuItem>
           ))}
           
-          {!isLoadingAuthOrProfile && isAdmin && ( // Check loading state before rendering admin item
-            <SidebarMenuItem key={adminNavItem.href} className="px-2">
-              <Link href={adminNavItem.href} passHref legacyBehavior>
-                <SidebarMenuButton
-                  variant="default"
-                  size="default"
-                  className={cn(
-                    "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                    pathname === adminNavItem.href
-                      ? 'bg-sidebar-primary text-sidebar-primary-foreground font-semibold shadow-sm'
-                      : 'text-sidebar-foreground/80 hover:text-sidebar-accent-foreground'
-                  )}
-                  isActive={pathname === adminNavItem.href}
-                  tooltip={{
-                    children: adminNavItem.title,
-                    className: "bg-sidebar-background text-sidebar-foreground border-sidebar-border"
-                  }}
-                  aria-label={adminNavItem.title}
-                   onClick={() => {
-                     if (isMobile && typeof setOpenMobile === 'function' && user) {
-                        setOpenMobile(false);
-                     }
-                  }}
-                >
-                  <adminNavItem.icon className="h-5 w-5" />
-                  <span className="group-data-[collapsible=icon]:hidden">
-                    {adminNavItem.title}
-                  </span>
-                </SidebarMenuButton>
-              </Link>
-            </SidebarMenuItem>
+          {!isLoadingAuthOrProfile && isAdmin && (
+            <>
+              {adminNavItems.map((adminItem) => (
+                <SidebarMenuItem key={adminItem.href} className="px-2">
+                  <Link href={adminItem.href} passHref legacyBehavior>
+                    <SidebarMenuButton
+                      variant="default"
+                      size="default"
+                      className={cn(
+                        "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                        pathname === adminItem.href
+                          ? 'bg-sidebar-primary text-sidebar-primary-foreground font-semibold shadow-sm'
+                          : 'text-sidebar-foreground/80 hover:text-sidebar-accent-foreground'
+                      )}
+                      isActive={pathname === adminItem.href}
+                      tooltip={{
+                        children: adminItem.title,
+                        className: "bg-sidebar-background text-sidebar-foreground border-sidebar-border"
+                      }}
+                      aria-label={adminItem.title}
+                      onClick={() => {
+                        if (isMobile && typeof setOpenMobile === 'function' && user) {
+                            setOpenMobile(false);
+                        }
+                      }}
+                    >
+                      <adminItem.icon className="h-5 w-5" />
+                      <span className="group-data-[collapsible=icon]:hidden">
+                        {adminItem.title}
+                      </span>
+                    </SidebarMenuButton>
+                  </Link>
+                </SidebarMenuItem>
+              ))}
+            </>
           )}
         </SidebarMenu>
       </SidebarContent>
