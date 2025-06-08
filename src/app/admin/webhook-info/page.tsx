@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth-provider';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, ArrowLeft, Info, KeyRound, Terminal, Settings2 } from 'lucide-react';
+import { Loader2, ArrowLeft, Info, KeyRound, Terminal, Settings2, Webhook } from 'lucide-react'; // Added Webhook here
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 
