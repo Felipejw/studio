@@ -1,22 +1,26 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation'; 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { UserCircle, CreditCard, Settings, Loader2, Phone, Fingerprint, ShieldCheck, Edit, Trash2 } from 'lucide-react';
+import { UserCircle, CreditCard, Settings, Loader2, Phone, Fingerprint, ShieldCheck, Edit, Trash2, CalendarClock } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { db, doc, getDoc, setDoc } from '@/lib/firebase'; 
+import { db, doc, getDoc, setDoc, signOut, auth, collection, query, where, getDocs, writeBatch, deleteDoc as deleteFirestoreDoc, Timestamp } from '@/lib/firebase'; 
 import { useAuth, type UserProfileData as AuthUserProfileData, type UserPlan } from '@/components/auth-provider'; 
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { format, addDays, parseISO, isValid } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 export default function ProfilePage() {
-  const { user, userId, userProfile, loading: authProfileLoading, profileLoading } = useAuth();
+  const { user, userId, userProfile, loading: authProfileLoading, profileLoading, setUserProfile: setAuthUserProfile } = useAuth();
   const [isLoading, setIsLoading] = useState(true); 
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({ name: '', email: '', whatsapp: '', cpf: '' });
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   const { toast } = useToast();
   const router = useRouter(); 
@@ -40,16 +44,21 @@ export default function ProfilePage() {
 
   }, [userProfile, authProfileLoading, user, profileLoading]);
 
-
-  const handlePlanChangeNavigation = (newPlan: UserPlan) => {
-    if (!userProfile || !userId) return;
-    if (newPlan !== userProfile.plan) {
-      // For plans other than 'premium' or if direct external link isn't applicable
-      router.push(`/checkout?planId=${newPlan}`);
-    } else {
-       toast({ title: "Plano Atual", description: "Você já está neste plano." });
+  const planExpiryDate = useMemo(() => {
+    if (userProfile?.plan === 'premium' && userProfile.lastPayment) {
+      try {
+        const lastPaymentDate = parseISO(userProfile.lastPayment);
+        if (isValid(lastPaymentDate)) {
+          const expiry = addDays(lastPaymentDate, 30);
+          return format(expiry, "dd/MM/yyyy", { locale: ptBR });
+        }
+      } catch (e) {
+        console.error("Error parsing lastPayment date for expiry:", e);
+      }
     }
-  };
+    return "N/A";
+  }, [userProfile?.plan, userProfile?.lastPayment]);
+
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,15 +77,19 @@ export default function ProfilePage() {
       const updatedProfileDataFirestore: AuthUserProfileData = { 
         ...currentData, 
         name: editForm.name, 
-        email: editForm.email, 
+        // email: editForm.email, // Email de login não deve ser alterado aqui
         whatsapp: editForm.whatsapp || '',
         cpf: editForm.cpf || '',
         plan: currentData.plan, 
         memberSince: currentData.memberSince, 
         lastPayment: currentData.lastPayment, 
+        plan_updated_at: currentData.plan_updated_at,
       };
       await setDoc(userDocRef, updatedProfileDataFirestore, { merge: true });
       
+      // Update profile in AuthContext
+      setAuthUserProfile(updatedProfileDataFirestore);
+
       setIsEditing(false);
       toast({ title: "Perfil Atualizado", description: "Suas informações foram salvas." });
     } catch (error: any) {
@@ -84,6 +97,61 @@ export default function ProfilePage() {
       toast({ variant: "destructive", title: "Erro ao Atualizar Perfil", description: "Verifique o console." });
     }
     setIsLoading(false); 
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!userId || !user) {
+      toast({ variant: "destructive", title: "Erro", description: "Usuário não autenticado." });
+      return;
+    }
+    setIsDeletingAccount(true);
+    try {
+      const batch = writeBatch(db);
+
+      // Collections to delete user-specific data from
+      const collectionsToDelete = [
+        { name: 'trades', field: 'userId' },
+        { name: 'trading_plans', field: 'userId' },
+        { name: 'mindset_logs', field: 'userId' },
+        { name: 'trader_group_messages', field: 'userId' }
+      ];
+
+      for (const colInfo of collectionsToDelete) {
+        const q = query(collection(db, colInfo.name), where(colInfo.field, "==", userId));
+        const snapshot = await getDocs(q);
+        snapshot.forEach(docSnap => batch.delete(docSnap.ref));
+      }
+
+      // Delete risk_config document
+      const riskConfigRef = doc(db, 'risk_config', userId);
+      const riskConfigSnap = await getDoc(riskConfigRef);
+      if (riskConfigSnap.exists()) {
+        batch.delete(riskConfigRef);
+      }
+      
+      // Delete user document from 'users' collection
+      const userDocRef = doc(db, 'users', userId);
+      batch.delete(userDocRef);
+
+      await batch.commit();
+      
+      await signOut(auth);
+      toast({
+        title: "Conta Excluída",
+        description: "Seus dados foram removidos do Firestore. Você foi desconectado.",
+        duration: 7000,
+      });
+      router.push('/login');
+
+    } catch (error: any) {
+      console.error("Error deleting account data:", error);
+      toast({
+        variant: "destructive",
+        title: "Erro ao Excluir Conta",
+        description: `Não foi possível remover seus dados. ${error.message || 'Consulte o console.'}`,
+      });
+    }
+    setIsDeletingAccount(false);
   };
   
   if (isLoading || authProfileLoading) { 
@@ -121,7 +189,7 @@ export default function ProfilePage() {
                   <CardDescription>{userProfile.email}</CardDescription>
                 </div>
               </div>
-              <Button variant="outline" size="icon" onClick={() => setIsEditing(!isEditing)} disabled={isLoading}>
+              <Button variant="outline" size="icon" onClick={() => setIsEditing(!isEditing)} disabled={isLoading || isDeletingAccount}>
                 <Edit className="h-4 w-4"/>
                 <span className="sr-only">Editar Perfil</span>
               </Button>
@@ -147,11 +215,11 @@ export default function ProfilePage() {
                     <Input id="cpf" placeholder="XXX.XXX.XXX-XX" value={editForm.cpf} onChange={(e) => setEditForm({...editForm, cpf: e.target.value})} />
                   </div>
                   <div className="flex gap-2">
-                    <Button type="submit" disabled={isLoading}>
-                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    <Button type="submit" disabled={isLoading || isDeletingAccount}>
+                        {(isLoading && !isDeletingAccount) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Salvar
                     </Button>
-                    <Button type="button" variant="ghost" onClick={() => {setIsEditing(false); setEditForm({name: userProfile.name, email: userProfile.email, whatsapp: userProfile.whatsapp || '', cpf: userProfile.cpf || ''});}} disabled={isLoading}>Cancelar</Button>
+                    <Button type="button" variant="ghost" onClick={() => {setIsEditing(false); setEditForm({name: userProfile.name || '', email: userProfile.email || '', whatsapp: userProfile.whatsapp || '', cpf: userProfile.cpf || ''});}} disabled={isLoading || isDeletingAccount}>Cancelar</Button>
                   </div>
                 </form>
               ) : (
@@ -167,7 +235,7 @@ export default function ProfilePage() {
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Plano Atual</p>
                      <div className="flex items-center gap-2">
-                       <p className="font-semibold text-lg text-primary">{userProfile.plan === 'premium' ? 'Premium' : 'Gratuito'}</p>
+                       <p className="font-semibold text-lg text-primary capitalize">{userProfile.plan === 'affiliate_demo' ? 'Demo Afiliados' : userProfile.plan}</p>
                         {userProfile.plan === 'free' && (
                              <Button size="sm" variant="outline" asChild>
                                 <a href={kirvanoPremiumLink} target="_blank" rel="noopener noreferrer">
@@ -184,14 +252,17 @@ export default function ProfilePage() {
                   </div>
                    {userProfile.lastPayment && userProfile.plan === 'premium' && (
                     <div>
-                        <p className="text-sm font-medium text-muted-foreground">Último Pagamento (Premium)</p>
-                        <p>{new Date(userProfile.lastPayment).toLocaleDateString('pt-BR')}</p>
+                        <p className="text-sm font-medium text-muted-foreground">Último Pagamento</p>
+                        <p>{isValid(parseISO(userProfile.lastPayment)) ? format(parseISO(userProfile.lastPayment), "dd/MM/yyyy", { locale: ptBR }) : 'Data inválida'}</p>
                     </div>
                    )}
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Membro Desde</p>
-                    <p>{userProfile.memberSince ? new Date(userProfile.memberSince).toLocaleDateString('pt-BR') : 'N/A'}</p>
-                  </div>
+                   {userProfile.plan === 'premium' && (
+                    <div>
+                        <p className="text-sm font-medium text-muted-foreground flex items-center"><CalendarClock className="mr-2 h-4 w-4" />Data de Vencimento do Plano</p>
+                        <p>{planExpiryDate}</p>
+                    </div>
+                   )}
+                   
                    <Button variant="outline" className="w-full sm:w-auto sm:col-span-2" onClick={() => router.push('/pricing')}>
                     <CreditCard className="mr-2 h-4 w-4" /> Ver Opções de Planos
                   </Button>
@@ -207,9 +278,35 @@ export default function ProfilePage() {
               <CardTitle className="font-headline flex items-center"><Settings className="mr-2 h-5 w-5"/>Configurações da Conta</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-               <Button variant="destructive" className="w-full justify-start" disabled>
-                <Trash2 className="mr-2 h-4 w-4" /> Excluir Conta (Em breve)
-              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" className="w-full justify-start" disabled={isLoading || isDeletingAccount}>
+                    {isDeletingAccount && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    <Trash2 className="mr-2 h-4 w-4" /> Excluir Minha Conta
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Confirmar Exclusão de Conta</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Tem certeza que deseja excluir sua conta e todos os seus dados associados (trades, planos, configurações de risco, etc.)? 
+                      Esta ação é irreversível. 
+                      <br/><br/>
+                      <strong>Importante:</strong> Seus dados serão removidos do nosso banco de dados, mas sua conta de login (autenticação) no Firebase permanecerá ativa. Para uma exclusão completa, o administrador precisará remover sua conta de autenticação manualmente.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isDeletingAccount}>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteAccount} className="bg-destructive hover:bg-destructive/80" disabled={isDeletingAccount}>
+                      {isDeletingAccount ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Confirmar Exclusão
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+               <p className="text-xs text-muted-foreground">
+                A exclusão da conta remove seus dados do Tubarões da Bolsa (Firestore). Para remover completamente seu login (Firebase Auth), entre em contato com o suporte ou administrador.
+              </p>
             </CardContent>
           </Card>
         </div>
