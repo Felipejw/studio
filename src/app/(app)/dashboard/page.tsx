@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Percent, FileText, ScanLine, AlertTriangle, TrendingUp, Smile, BarChart, Loader2, DollarSign, Lightbulb, LineChartIcon, CalendarIcon, Clock, Tag, CheckCircle, XCircle } from 'lucide-react';
+import { Percent, FileText, AlertTriangle, TrendingUp, Smile, BarChart, Loader2, DollarSign, Lightbulb, LineChartIcon, CalendarIcon, Clock, Tag, CheckCircle, XCircle, PlusCircle, Brain } from 'lucide-react'; // Added PlusCircle, Brain
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/components/auth-provider';
 import { ResponsiveContainer, LineChart as RechartsLineChart, XAxis, YAxis, Tooltip as RechartsTooltip, Line as RechartsLine, CartesianGrid, BarChart as RechartsBarChart, Bar as RechartsBar, Cell } from 'recharts';
@@ -410,6 +410,43 @@ export default function DashboardPage() {
             <StatCard title="Horário Mais Operado" value={mostTradedPeriodForPeriod} icon={<Clock className="h-5 w-5 text-muted-foreground" />} description="Período no dia" isLoadingCard={isLoading && allTrades.length === 0} />
           </div>
         )}
+      </section>
+
+      <section className="mb-8">
+        <Card className="shadow-md hover:shadow-lg transition-shadow duration-300">
+          <CardHeader>
+            <CardTitle className="font-headline text-lg">Ações Rápidas</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <Button asChild variant="outline" className="h-auto text-left p-4 hover:shadow-md transition-shadow">
+              <Link href="/trade-log" className="flex flex-col items-start space-y-1 w-full">
+                <div className="flex items-center gap-2 mb-1">
+                  <PlusCircle className="h-6 w-6 text-primary" />
+                  <span className="text-base font-semibold">Registrar Trade</span>
+                </div>
+                <p className="text-xs text-muted-foreground">Adicione uma nova operação ao seu diário de forma rápida.</p>
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="h-auto text-left p-4 hover:shadow-md transition-shadow">
+              <Link href="/daily-plan" className="flex flex-col items-start space-y-1 w-full">
+                <div className="flex items-center gap-2 mb-1">
+                  <FileText className="h-6 w-6 text-primary" />
+                  <span className="text-base font-semibold">Plano Diário com IA</span>
+                </div>
+                <p className="text-xs text-muted-foreground">Defina suas metas e deixe a IA criar seu plano.</p>
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="h-auto text-left p-4 hover:shadow-md transition-shadow">
+              <Link href="/ai-psychologist" className="flex flex-col items-start space-y-1 w-full">
+                <div className="flex items-center gap-2 mb-1">
+                  <Brain className="h-6 w-6 text-primary" />
+                  <span className="text-base font-semibold">Psicólogo Virtual</span>
+                </div>
+                <p className="text-xs text-muted-foreground">Converse com a IA para obter apoio emocional.</p>
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
       </section>
 
       <div className="grid gap-6 md:grid-cols-3 mb-6">
