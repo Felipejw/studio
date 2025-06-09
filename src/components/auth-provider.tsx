@@ -8,7 +8,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 
 // Define a more specific user profile type that includes the plan
-export type UserPlan = 'free' | 'premium';
+export type UserPlan = 'free' | 'premium' | 'affiliate_demo';
 
 export interface UserProfileData {
   uid: string;

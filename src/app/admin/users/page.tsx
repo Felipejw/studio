@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { Loader2, ShieldAlert, Users, ArrowLeft, Phone, Fingerprint, Edit, Trash2, CalendarIcon, Clock, Settings2 } from 'lucide-react'; 
+import { Loader2, ShieldAlert, Users, ArrowLeft, Phone, Fingerprint, Edit, Trash2, CalendarIcon, Settings2 } from 'lucide-react'; 
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { format, parseISO } from 'date-fns';
@@ -33,11 +33,11 @@ type UserPlan = AuthUserPlan;
 interface UserProfileDataFirestore extends Omit<AuthUserProfileData, 'memberSince' | 'lastPayment' | 'plan_updated_at'> {
   memberSince?: Timestamp;
   lastPayment?: Timestamp;
-  plan_updated_at?: Timestamp; 
+  // plan_updated_at is managed by webhook/plan change, not directly listed here but exists in Firestore
 }
 
 
-interface UserProfileAdminView extends Omit<UserProfileDataFirestore, 'memberSince' | 'lastPayment' | 'plan_updated_at'> {
+interface UserProfileAdminView extends Omit<UserProfileDataFirestore, 'memberSince' | 'lastPayment'> {
   id: string; 
   email: string; 
   name: string; 
@@ -45,8 +45,6 @@ interface UserProfileAdminView extends Omit<UserProfileDataFirestore, 'memberSin
   memberSinceDisplay?: string | null;
   lastPaymentDisplay?: string | null; 
   originalLastPayment?: Timestamp | null; 
-  planUpdatedAtDisplay?: string | null; 
-  originalPlanUpdatedAt?: Timestamp | null; 
   whatsapp: string; 
   cpf: string; 
 }
@@ -100,7 +98,7 @@ export default function AdminUsersPage() {
           const querySnapshot = await getDocs(usersQuery);
           const fetchedUsers: UserProfileAdminView[] = [];
           querySnapshot.forEach((docSnap) => {
-            const data = docSnap.data() as UserProfileDataFirestore;
+            const data = docSnap.data() as UserProfileDataFirestore & { plan_updated_at?: Timestamp }; // Include plan_updated_at for internal use if needed elsewhere
             fetchedUsers.push({
               id: docSnap.id,
               uid: data.uid,
@@ -112,8 +110,7 @@ export default function AdminUsersPage() {
               memberSinceDisplay: data.memberSince ? (data.memberSince instanceof Timestamp ? data.memberSince.toDate().toLocaleDateString('pt-BR') : String(data.memberSince)) : 'N/A',
               lastPaymentDisplay: data.lastPayment ? (data.lastPayment instanceof Timestamp ? data.lastPayment.toDate().toLocaleDateString('pt-BR') : String(data.lastPayment)) : 'N/A',
               originalLastPayment: data.lastPayment instanceof Timestamp ? data.lastPayment : null,
-              planUpdatedAtDisplay: data.plan_updated_at ? (data.plan_updated_at instanceof Timestamp ? data.plan_updated_at.toDate().toLocaleDateString('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : String(data.plan_updated_at)) : 'N/A',
-              originalPlanUpdatedAt: data.plan_updated_at instanceof Timestamp ? data.plan_updated_at : null,
+              // planUpdatedAtDisplay is removed from view
             });
           });
           setUsersList(fetchedUsers);
@@ -136,6 +133,8 @@ export default function AdminUsersPage() {
          plan: newPlan,
          plan_updated_at: planUpdatedAt
       };
+
+      // Only update lastPayment if the new plan is 'premium'
       if (newPlan === 'premium') {
         updateData.lastPayment = planUpdatedAt;
       }
@@ -146,12 +145,17 @@ export default function AdminUsersPage() {
         prevUsers.map(u => (u.id === userIdToUpdate ? { 
             ...u, 
             plan: newPlan, 
-            plan_updated_at: planUpdatedAt, 
-            planUpdatedAtDisplay: planUpdatedAt.toDate().toLocaleDateString('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
+            // We don't display plan_updated_at, but it's good to keep the timestamp in Firestore
             ...(newPlan === 'premium' && { lastPayment: planUpdatedAt, lastPaymentDisplay: planUpdatedAt.toDate().toLocaleDateString('pt-BR')})
         } : u))
       );
-      toast({ title: 'Plano Atualizado!', description: `Plano do usuário alterado para ${newPlan === 'premium' ? 'Premium' : 'Gratuito'}.` });
+      
+      let planNameToast = '';
+      if (newPlan === 'premium') planNameToast = 'Premium';
+      else if (newPlan === 'free') planNameToast = 'Gratuito';
+      else if (newPlan === 'affiliate_demo') planNameToast = 'Demo Afiliados';
+
+      toast({ title: 'Plano Atualizado!', description: `Plano do usuário alterado para ${planNameToast}.` });
     } catch (error) {
       console.error("Error updating plan:", error);
       toast({ variant: "destructive", title: "Erro ao Atualizar Plano", description: "Não foi possível alterar o plano do usuário." });
@@ -206,6 +210,7 @@ export default function AdminUsersPage() {
         cpf: data.cpf || '',
         lastPayment: newLastPaymentTimestamp,
       };
+      // If lastPayment is updated and user is premium, also update plan_updated_at to reflect this "subscription event"
       if (newLastPaymentTimestamp && editingUser.plan === 'premium') {
         updatePayload.plan_updated_at = newLastPaymentTimestamp;
       }
@@ -223,10 +228,7 @@ export default function AdminUsersPage() {
                 cpf: data.cpf || 'N/A',
                 lastPaymentDisplay: newLastPaymentTimestamp ? newLastPaymentTimestamp.toDate().toLocaleDateString('pt-BR') : 'N/A',
                 originalLastPayment: newLastPaymentTimestamp,
-                ...(newLastPaymentTimestamp && u.plan === 'premium' && {
-                    planUpdatedAtDisplay: newLastPaymentTimestamp.toDate().toLocaleDateString('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
-                    originalPlanUpdatedAt: newLastPaymentTimestamp,
-                })
+                // planUpdatedAtDisplay is not shown, but the underlying plan_updated_at is updated if conditions met
               }
             : u
         )
@@ -343,7 +345,6 @@ export default function AdminUsersPage() {
                       <TableHead><Fingerprint className="inline mr-1 h-4 w-4" />CPF</TableHead>
                       <TableHead>Plano Atual</TableHead>
                       <TableHead>Último Pagamento</TableHead>
-                      <TableHead><Clock className="inline mr-1 h-4 w-4" />Plano Atualizado Em</TableHead>
                       <TableHead className="text-center">Alterar Plano</TableHead>
                       <TableHead className="text-center">Ações</TableHead>
                     </TableRow>
@@ -355,9 +356,10 @@ export default function AdminUsersPage() {
                         <TableCell>{u.email}</TableCell>
                         <TableCell>{u.whatsapp}</TableCell>
                         <TableCell>{u.cpf}</TableCell>
-                        <TableCell className="capitalize">{u.plan === 'premium' ? 'Premium' : 'Gratuito'}</TableCell>
+                        <TableCell className="capitalize">
+                          {u.plan === 'premium' ? 'Premium' : u.plan === 'affiliate_demo' ? 'Demo Afiliados' : 'Gratuito'}
+                        </TableCell>
                         <TableCell>{u.lastPaymentDisplay}</TableCell>
-                        <TableCell>{u.planUpdatedAtDisplay}</TableCell>
                         <TableCell className="text-center w-[180px]">
                           {isUpdatingPlan === u.id ? (
                             <Loader2 className="h-5 w-5 animate-spin mx-auto" />
@@ -372,6 +374,7 @@ export default function AdminUsersPage() {
                               <SelectContent>
                                 <SelectItem value="free">Gratuito</SelectItem>
                                 <SelectItem value="premium">Premium</SelectItem>
+                                <SelectItem value="affiliate_demo">Demo Afiliados</SelectItem>
                               </SelectContent>
                             </Select>
                           )}
