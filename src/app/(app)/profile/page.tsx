@@ -47,13 +47,14 @@ export default function ProfilePage() {
   const planExpiryDate = useMemo(() => {
     if (userProfile?.plan === 'premium' && userProfile.lastPayment) {
       try {
-        const lastPaymentDate = parseISO(userProfile.lastPayment);
+        // Ensure lastPayment is treated as a string for parseISO
+        const lastPaymentDate = parseISO(String(userProfile.lastPayment));
         if (isValid(lastPaymentDate)) {
           const expiry = addDays(lastPaymentDate, 30);
           return format(expiry, "dd/MM/yyyy", { locale: ptBR });
         }
       } catch (e) {
-        console.error("Error parsing lastPayment date for expiry:", e);
+        console.error("Error parsing lastPayment date for expiry:", e, "Value:", userProfile.lastPayment);
       }
     }
     return "N/A";
@@ -81,7 +82,8 @@ export default function ProfilePage() {
         whatsapp: editForm.whatsapp || '',
         cpf: editForm.cpf || '',
         plan: currentData.plan, 
-        memberSince: currentData.memberSince, 
+        // memberSince is not editable here, ensure it's correctly typed
+        memberSince: typeof currentData.memberSince === 'string' ? currentData.memberSince : (currentData.memberSince as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
         lastPayment: currentData.lastPayment, 
         plan_updated_at: currentData.plan_updated_at,
       };
@@ -138,7 +140,7 @@ export default function ProfilePage() {
       await signOut(auth);
       toast({
         title: "Conta Excluída",
-        description: "Seus dados foram removidos do Firestore. Você foi desconectado.",
+        description: "Sua conta e todos os dados associados foram removidos. Você foi desconectado.",
         duration: 7000,
       });
       router.push('/login');
@@ -253,7 +255,7 @@ export default function ProfilePage() {
                    {userProfile.lastPayment && userProfile.plan === 'premium' && (
                     <div>
                         <p className="text-sm font-medium text-muted-foreground">Último Pagamento</p>
-                        <p>{isValid(parseISO(userProfile.lastPayment)) ? format(parseISO(userProfile.lastPayment), "dd/MM/yyyy", { locale: ptBR }) : 'Data inválida'}</p>
+                        <p>{isValid(parseISO(String(userProfile.lastPayment))) ? format(parseISO(String(userProfile.lastPayment)), "dd/MM/yyyy", { locale: ptBR }) : 'Data inválida'}</p>
                     </div>
                    )}
                    {userProfile.plan === 'premium' && (
@@ -289,10 +291,7 @@ export default function ProfilePage() {
                   <AlertDialogHeader>
                     <AlertDialogTitle>Confirmar Exclusão de Conta</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Tem certeza que deseja excluir sua conta e todos os seus dados associados (trades, planos, configurações de risco, etc.)? 
-                      Esta ação é irreversível. 
-                      <br/><br/>
-                      <strong>Importante:</strong> Seus dados serão removidos do nosso banco de dados, mas sua conta de login (autenticação) no Firebase permanecerá ativa. Para uma exclusão completa, o administrador precisará remover sua conta de autenticação manualmente.
+                      Tem certeza que deseja excluir sua conta? Todos os seus dados associados (trades, planos, configurações, etc.) serão <strong>permanentemente removidos</strong>. Esta ação é irreversível.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -304,9 +303,6 @@ export default function ProfilePage() {
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
-               <p className="text-xs text-muted-foreground">
-                A exclusão da conta remove seus dados do Tubarões da Bolsa (Firestore). Para remover completamente seu login (Firebase Auth), entre em contato com o suporte ou administrador.
-              </p>
             </CardContent>
           </Card>
         </div>
@@ -314,3 +310,4 @@ export default function ProfilePage() {
     </div>
   );
 }
+
