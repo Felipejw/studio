@@ -1,6 +1,6 @@
 
 import type { LucideIcon } from 'lucide-react';
-import { LayoutDashboard, FileText, BookOpenText, Brain, Gauge, User, DollarSign, Users as GroupsIcon, ClipboardList, Handshake, BrainCircuit } from 'lucide-react';
+import { LayoutDashboard, FileText, BookOpenText, Brain, Gauge, User, DollarSign, Users as GroupsIcon, ClipboardList, Handshake, BrainCircuit, ShoppingCart } from 'lucide-react';
 
 export interface NavItem {
   title: string;
@@ -60,6 +60,12 @@ export const navItems: NavItem[] = [
     label: 'Comunidades de Trading',
   },
   {
+    title: 'Loja do Trader',
+    href: '/store',
+    icon: ShoppingCart,
+    label: 'Produtos Digitais',
+  },
+  {
     title: 'Afiliados',
     href: '/affiliate',
     icon: Handshake,
@@ -79,3 +85,4 @@ export const navItems: NavItem[] = [
   },
 ];
 
+    

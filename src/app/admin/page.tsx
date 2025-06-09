@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth-provider';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, ArrowRight, Users, Settings2, Webhook } from 'lucide-react';
+import { Loader2, ArrowRight, Users, Settings2, Webhook, PackagePlus } from 'lucide-react';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 
@@ -47,6 +47,12 @@ export default function AdminDashboardPage() {
       description: "Visualize, edite e gerencie os planos dos usuários da plataforma.",
       href: "/admin/users",
       icon: Users,
+    },
+    {
+      title: "Gerenciar Produtos da Loja",
+      description: "Adicione, edite ou remova produtos da Loja do Trader.",
+      href: "/admin/store-products",
+      icon: PackagePlus,
     },
     {
       title: "Informações do Webhook",
@@ -98,3 +104,5 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+
+    
