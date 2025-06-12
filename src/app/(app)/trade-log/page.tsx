@@ -15,15 +15,15 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { PlusCircle, Filter, ListChecks, TrendingUp, Meh, Repeat, CalendarIcon, Loader2, Sun, Moon, CloudSun, Trash2, BarChart3, LineChart, ThumbsUp, ThumbsDown, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { PlusCircle, Filter, ListChecks, TrendingUp, Meh, Repeat, CalendarIcon, Loader2, Sun, Moon, CloudSun, Trash2, BarChart3, LineChart, ThumbsUp, ThumbsDown, ArrowUpCircle, ArrowDownCircle, Edit } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { format, parseISO, subDays } from "date-fns"; // Added subDays
+import { format, parseISO, subDays, startOfDay, endOfDay, isValid } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { db, collection, addDoc, getDocs, query, where, orderBy, Timestamp, deleteDoc, doc } from '@/lib/firebase';
+import { db, collection, addDoc, getDocs, query, where, orderBy, Timestamp, deleteDoc, doc, updateDoc } from '@/lib/firebase';
 import { useAuth } from '@/components/auth-provider';
 import { ResponsiveContainer, LineChart as RechartsLineChart, BarChart as RechartsBarChart, XAxis, YAxis, Tooltip as RechartsTooltip, Line as RechartsLine, Bar as RechartsBar, CartesianGrid, Legend, Cell } from 'recharts';
 import { ChartContainer, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
@@ -88,12 +88,13 @@ const chartConfigBase = {
 
 
 export default function TradeLogPage() {
-  const [trades, setTrades] = useState<TradeEntry[]>([]);
+  const [allTrades, setAllTrades] = useState<TradeEntry[]>([]); // Stores all trades from last 90 days
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [filterDate, setFilterDate] = useState<Date | undefined>();
+  const [filterDate, setFilterDate] = useState<Date | undefined>(new Date()); // Initialize with today's date
   const [isLoadingTrades, setIsLoadingTrades] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const [tradeToDelete, setTradeToDelete] = useState<TradeEntry | null>(null);
+  const [editingTrade, setEditingTrade] = useState<TradeEntry | null>(null);
 
   const { toast } = useToast();
   const { userId, user } = useAuth();
@@ -117,7 +118,7 @@ export default function TradeLogPage() {
   const fetchTrades = async () => {
     if (!userId) {
       setIsLoadingTrades(false);
-      setTrades([]);
+      setAllTrades([]);
       return;
     }
     setIsLoadingTrades(true);
@@ -126,7 +127,7 @@ export default function TradeLogPage() {
       const q = query(
         collection(db, "trades"), 
         where("userId", "==", userId),
-        where("date", ">=", Timestamp.fromDate(ninetyDaysAgo)), // Filter for last 90 days
+        where("date", ">=", Timestamp.fromDate(ninetyDaysAgo)),
         orderBy("date", "desc")
       );
       const querySnapshot = await getDocs(q);
@@ -143,7 +144,7 @@ export default function TradeLogPage() {
           console.warn(`Document ${docSnap.id} has an invalid or missing 'date' field that is not a Firestore Timestamp. Data:`, data);
         }
       });
-      setTrades(fetchedTrades);
+      setAllTrades(fetchedTrades);
     } catch (error: any) {
       console.error("Erro DETALHADO ao CARREGAR trades (objeto completo):", error);
       let description = `Não foi possível buscar seus trades.`;
@@ -168,43 +169,72 @@ export default function TradeLogPage() {
       fetchTrades();
     } else {
       setIsLoadingTrades(false); 
-      setTrades([]); 
+      setAllTrades([]); 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
+  const handleEditTrade = (trade: TradeEntry) => {
+    setEditingTrade(trade);
+    form.reset({
+      date: trade.date,
+      asset: trade.asset,
+      type: trade.type,
+      result: trade.result,
+      amount: Math.abs(trade.profit),
+      period: trade.period,
+      emotionBefore: trade.emotionBefore,
+      emotionAfter: trade.emotionAfter,
+      setup: trade.setup || '',
+      comment: trade.comment || '',
+    });
+    setIsDialogOpen(true);
+  };
 
   const onSubmit: SubmitHandler<TradeFormValues> = async (data) => {
     if (!userId) {
       toast({ variant: "destructive", title: "Erro de Autenticação", description: "Usuário não autenticado. Por favor, faça login novamente.", duration: 7000 });
       return;
     }
-    try {
-      let calculatedProfit = 0;
-      if (data.result === 'gain') {
-        calculatedProfit = Math.abs(data.amount);
-      } else if (data.result === 'loss') {
-        calculatedProfit = -Math.abs(data.amount);
-      }
+    
+    let calculatedProfit = 0;
+    if (data.result === 'gain') {
+      calculatedProfit = Math.abs(data.amount);
+    } else if (data.result === 'loss') {
+      calculatedProfit = -Math.abs(data.amount);
+    }
 
-      const tradeToSave: TradeEntryFirestore = {
-        userId: userId,
-        date: Timestamp.fromDate(data.date), 
-        asset: data.asset,
-        type: data.type,
-        result: data.result,
-        profit: calculatedProfit,
-        period: data.period,
-        setup: data.setup,
-        emotionBefore: data.emotionBefore,
-        emotionAfter: data.emotionAfter,
-        comment: data.comment,
-      };
-      await addDoc(collection(db, "trades"), tradeToSave);
-      toast({
-        title: "Trade Salvo!",
-        description: "Sua operação foi registrada com sucesso.",
-      });
+    const tradeDataPayload = {
+      userId: userId,
+      date: Timestamp.fromDate(data.date), 
+      asset: data.asset,
+      type: data.type,
+      result: data.result,
+      profit: calculatedProfit,
+      period: data.period,
+      setup: data.setup,
+      emotionBefore: data.emotionBefore,
+      emotionAfter: data.emotionAfter,
+      comment: data.comment,
+    };
+
+    try {
+      if (editingTrade) {
+        const tradeDocRef = doc(db, "trades", editingTrade.id);
+        await updateDoc(tradeDocRef, tradeDataPayload);
+        toast({
+          title: "Trade Atualizado!",
+          description: "Sua operação foi atualizada com sucesso.",
+        });
+        setEditingTrade(null);
+      } else {
+        await addDoc(collection(db, "trades"), tradeDataPayload);
+        toast({
+          title: "Trade Salvo!",
+          description: "Sua operação foi registrada com sucesso.",
+        });
+      }
+      
       form.reset({
         date: new Date(),
         asset: '',
@@ -220,11 +250,11 @@ export default function TradeLogPage() {
       setIsDialogOpen(false);
       fetchTrades(); 
     } catch (error: any) {
-      console.error("Erro DETALHADO ao SALVAR trade (objeto completo):", error);
+      console.error(`Erro ao ${editingTrade ? 'atualizar' : 'salvar'} trade:`, error);
       toast({
         variant: "destructive",
-        title: "Erro ao Salvar Trade",
-        description: `Não foi possível registrar sua operação. Cód: ${error.code || 'Desconhecido'}. Msg: ${error.message || String(error)}. Verifique o console.`,
+        title: `Erro ao ${editingTrade ? 'Atualizar' : 'Salvar'} Trade`,
+        description: `Não foi possível ${editingTrade ? 'atualizar' : 'registrar'} sua operação. Cód: ${error.code || 'Desconhecido'}. Msg: ${error.message || String(error)}. Verifique o console.`,
         duration: 9000,
       });
     }
@@ -242,7 +272,7 @@ export default function TradeLogPage() {
         title: "Trade Excluído!",
         description: `O trade do ativo ${tradeToDelete.asset} foi excluído.`,
       });
-      setTrades(prevTrades => prevTrades.filter(trade => trade.id !== tradeToDelete.id));
+      setAllTrades(prevTrades => prevTrades.filter(trade => trade.id !== tradeToDelete.id));
       setTradeToDelete(null);
     } catch (error: any) {
       console.error("Erro ao excluir trade:", error);
@@ -255,34 +285,46 @@ export default function TradeLogPage() {
     setIsDeleting(false);
   };
 
-  const filteredTrades = useMemo(() => {
-    if (!filterDate) return trades;
-    const filterDayStart = new Date(filterDate);
-    filterDayStart.setHours(0, 0, 0, 0);
-    const filterDayEnd = new Date(filterDate);
-    filterDayEnd.setHours(23, 59, 59, 999);
-
-    return trades.filter(trade => {
+  const tradesForTable = useMemo(() => {
+    if (!filterDate) { // Default: show today's trades
+      const todayStart = startOfDay(new Date());
+      const todayEnd = endOfDay(new Date());
+      return allTrades.filter(trade => {
         const tradeDate = trade.date;
-        return tradeDate >= filterDayStart && tradeDate <= filterDayEnd;
+        return tradeDate >= todayStart && tradeDate <= todayEnd;
+      });
+    }
+    // Show trades for the selected filterDate
+    const filterDayStart = startOfDay(filterDate);
+    const filterDayEnd = endOfDay(filterDate);
+    return allTrades.filter(trade => {
+      const tradeDate = trade.date;
+      return tradeDate >= filterDayStart && tradeDate <= filterDayEnd;
     });
-  }, [trades, filterDate]);
+  }, [allTrades, filterDate]);
 
-  const totalProfit = useMemo(() => {
-    return filteredTrades.reduce((acc, trade) => acc + trade.profit, 0);
-  }, [filteredTrades]);
+
+  const totalProfitForTable = useMemo(() => {
+    return tradesForTable.reduce((acc, trade) => acc + trade.profit, 0);
+  }, [tradesForTable]);
 
   const chartDataPL = useMemo(() => {
-    if (filteredTrades.length === 0) return [];
-    if (filterDate) {
-      return filteredTrades
+    const sourceTrades = filterDate ? tradesForTable : allTrades;
+    if (sourceTrades.length === 0) return [];
+
+    if (filterDate && isValid(filterDate)) { // Day specific selected, show individual trades for that day
+      return sourceTrades
+        .filter(trade => { // Ensure trades are from the selected day only for this view
+            const tradeDayStart = startOfDay(trade.date);
+            return tradeDayStart.getTime() === startOfDay(filterDate).getTime();
+        })
         .sort((a,b) => a.date.getTime() - b.date.getTime()) 
         .map((trade) => ({
           name: `${format(trade.date, 'HH:mm')} (${trade.asset.substring(0,6)})`,
           profit: trade.profit
         }));
-    } else {
-        const dailyData = filteredTrades.reduce((acc, trade) => {
+    } else { // No specific day filter, or filter cleared - aggregate daily for last 90 days
+        const dailyData = allTrades.reduce((acc, trade) => {
         const day = format(trade.date, 'yyyy-MM-dd');
         if (!acc[day]) {
             acc[day] = { date: day, profit: 0, count: 0 };
@@ -299,20 +341,26 @@ export default function TradeLogPage() {
             profit: d.profit,
         }));
     }
-  }, [filteredTrades, filterDate]);
+  }, [allTrades, tradesForTable, filterDate]);
 
   const chartDataEmotion = useMemo(() => {
-    if (filteredTrades.length === 0) return [];
-     if (filterDate) {
-        return filteredTrades
+    const sourceTrades = filterDate ? tradesForTable : allTrades;
+    if (sourceTrades.length === 0) return [];
+
+     if (filterDate && isValid(filterDate)) { // Day specific selected
+        return sourceTrades
+            .filter(trade => {
+                const tradeDayStart = startOfDay(trade.date);
+                return tradeDayStart.getTime() === startOfDay(filterDate).getTime();
+            })
             .sort((a,b) => a.date.getTime() - b.date.getTime())
             .map((trade) => ({
             name: `${format(trade.date, 'HH:mm')} (${trade.asset.substring(0,6)})`,
             emotionBefore: trade.emotionBefore,
             emotionAfter: trade.emotionAfter,
             }));
-    } else {
-        const dailyData = filteredTrades.reduce((acc, trade) => {
+    } else { // Aggregate daily for last 90 days
+        const dailyData = allTrades.reduce((acc, trade) => {
             const day = format(trade.date, 'yyyy-MM-dd');
             if (!acc[day]) {
                 acc[day] = { date: day, emotionBeforeSum: 0, emotionAfterSum: 0, count: 0 };
@@ -331,11 +379,12 @@ export default function TradeLogPage() {
             emotionAfter: d.count > 0 ? parseFloat((d.emotionAfterSum / d.count).toFixed(1)) : 0,
             }));
     }
-  }, [filteredTrades, filterDate]);
+  }, [allTrades, tradesForTable, filterDate]);
 
   const performanceMetrics = useMemo(() => {
-    const winningTrades = filteredTrades.filter(t => t.profit > 0);
-    const losingTrades = filteredTrades.filter(t => t.profit < 0);
+    const sourceTrades = tradesForTable; // Metrics should reflect what's in the table
+    const winningTrades = sourceTrades.filter(t => t.profit > 0);
+    const losingTrades = sourceTrades.filter(t => t.profit < 0);
 
     const totalWinAmount = winningTrades.reduce((sum, t) => sum + t.profit, 0);
     const totalLossAmount = losingTrades.reduce((sum, t) => sum + Math.abs(t.profit), 0);
@@ -346,7 +395,7 @@ export default function TradeLogPage() {
     const payoffRatio = avgLoss > 0 ? avgWin / avgLoss : (avgWin > 0 ? Infinity : 0);
 
     const highestWin = winningTrades.length > 0 ? Math.max(...winningTrades.map(t => t.profit)) : 0;
-    const biggestLoss = losingTrades.length > 0 ? Math.min(...losingTrades.map(t => t.profit)) : 0; // Will be negative or zero
+    const biggestLoss = losingTrades.length > 0 ? Math.min(...losingTrades.map(t => t.profit)) : 0;
 
     return {
       avgWin,
@@ -355,9 +404,9 @@ export default function TradeLogPage() {
       numWinningTrades: winningTrades.length,
       numLosingTrades: losingTrades.length,
       highestWin,
-      biggestLoss: Math.abs(biggestLoss), // Display as positive value
+      biggestLoss: Math.abs(biggestLoss),
     };
-  }, [filteredTrades]);
+  }, [tradesForTable]);
 
   const payoffChartData = [
     { name: "Lucro Médio", value: performanceMetrics.avgWin },
@@ -365,6 +414,15 @@ export default function TradeLogPage() {
   ];
 
   if (!user) return null;
+
+  const cardDescriptionText = filterDate 
+    ? `Trades para ${format(filterDate, "PPP", { locale: ptBR })}.`
+    : "Trades do dia atual. Use o filtro para ver outras datas (até 90 dias atrás).";
+  
+  const tableCaptionText = `Total P/L ${filterDate ? `do dia ${format(filterDate, "dd/MM/yyyy", {locale: ptBR})}` : "do dia de hoje"}:`;
+
+  const performanceMetricsTitle = `Desempenho Detalhado (${filterDate ? `dia ${format(filterDate, "dd/MM", {locale: ptBR})}` : "dia de hoje"})`;
+
 
   return (
     <div className="container mx-auto py-8">
@@ -374,27 +432,20 @@ export default function TradeLogPage() {
           setIsDialogOpen(isOpen);
           if (!isOpen) {
             form.reset({
-              date: new Date(),
-              asset: '',
-              type: 'compra',
-              result: 'gain',
-              amount: 0,
-              period: 'manhã',
-              emotionBefore: 5,
-              emotionAfter: 5,
-              setup: '',
-              comment: ''
+              date: new Date(), asset: '', type: 'compra', result: 'gain', amount: 0,
+              period: 'manhã', emotionBefore: 5, emotionAfter: 5, setup: '', comment: ''
             });
+            setEditingTrade(null); 
           }
         }}>
           <DialogTrigger asChild>
             <Button disabled={!userId}>
-              <PlusCircle className="mr-2 h-4 w-4" /> Novo Trade
+              <PlusCircle className="mr-2 h-4 w-4" /> {editingTrade ? 'Editar Trade' : 'Novo Trade'}
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="font-headline">Registrar Novo Trade</DialogTitle>
+              <DialogTitle className="font-headline">{editingTrade ? 'Editar Trade Registrado' : 'Registrar Novo Trade'}</DialogTitle>
             </DialogHeader>
             <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -578,7 +629,7 @@ export default function TradeLogPage() {
                 <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
                 <Button type="submit" disabled={form.formState.isSubmitting}>
                   {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Salvar Trade
+                  {editingTrade ? 'Salvar Alterações' : 'Salvar Trade'}
                 </Button>
               </DialogFooter>
             </form>
@@ -620,7 +671,7 @@ export default function TradeLogPage() {
         <Card className="mb-8">
           <CardHeader>
             <CardTitle className="font-headline flex items-center"><ListChecks className="mr-2 h-5 w-5" />Trades Registrados</CardTitle>
-            <CardDescription>Trades dos últimos 90 dias. Use o filtro para ver um dia específico.</CardDescription>
+            <CardDescription>{cardDescriptionText}</CardDescription>
           </CardHeader>
           <CardContent>
             {isLoadingTrades ? (
@@ -643,7 +694,7 @@ export default function TradeLogPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredTrades.length > 0 ? filteredTrades.map(trade => (
+                  {tradesForTable.length > 0 ? tradesForTable.map(trade => (
                     <TableRow key={trade.id}>
                       <TableCell>{format(trade.date, "dd/MM/yy HH:mm", { locale: ptBR })}</TableCell>
                       <TableCell>{trade.asset}</TableCell>
@@ -654,7 +705,10 @@ export default function TradeLogPage() {
                       </TableCell>
                       <TableCell>{trade.emotionBefore}/{trade.emotionAfter}</TableCell>
                       <TableCell>{trade.setup || 'N/A'}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right space-x-1">
+                        <Button variant="ghost" size="icon" onClick={() => handleEditTrade(trade)}>
+                          <Edit className="h-4 w-4 text-blue-600" />
+                        </Button>
                         <AlertDialogTrigger asChild>
                           <Button variant="ghost" size="icon" onClick={() => setTradeToDelete(trade)}>
                             <Trash2 className="h-4 w-4 text-destructive" />
@@ -664,12 +718,12 @@ export default function TradeLogPage() {
                     </TableRow>
                   )) : (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center h-24">Nenhum trade encontrado para {filterDate ? `o dia ${format(filterDate, "dd/MM/yyyy", { locale: ptBR })}` : 'os últimos 90 dias'}.</TableCell>
+                      <TableCell colSpan={8} className="text-center h-24">Nenhum trade encontrado para {filterDate ? `o dia ${format(filterDate, "dd/MM/yyyy", { locale: ptBR })}` : 'o dia de hoje'}.</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
-                {filteredTrades.length > 0 && (
-                    <TableCaption>Total P/L {filterDate ? `do dia ${format(filterDate, "dd/MM/yyyy", {locale: ptBR})}` : "dos últimos 90 dias"}: <span className={totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}>R$ {totalProfit.toFixed(2)}</span></TableCaption>
+                {tradesForTable.length > 0 && (
+                    <TableCaption>{tableCaptionText} <span className={totalProfitForTable >= 0 ? 'text-green-600' : 'text-red-600'}>R$ {totalProfitForTable.toFixed(2)}</span></TableCaption>
                 )}
               </Table>
             )}
@@ -751,12 +805,12 @@ export default function TradeLogPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="font-headline flex items-center"><Repeat className="mr-2 h-5 w-5 text-primary"/>Desempenho Detalhado</CardTitle>
-             <CardDescription>Métricas chave ({filterDate ? `dia ${format(filterDate, "dd/MM", {locale: ptBR})}` : "últimos 90 dias"})</CardDescription>
+            <CardTitle className="font-headline flex items-center"><Repeat className="mr-2 h-5 w-5 text-primary"/>{performanceMetricsTitle}</CardTitle>
+             <CardDescription>Métricas chave dos trades exibidos na tabela.</CardDescription>
           </CardHeader>
           <CardContent className="h-80 text-sm">
             {isLoadingTrades ? (<Loader2 className="mx-auto mt-12 h-8 w-8 animate-spin text-primary" />) : 
-             filteredTrades.length > 0 ? (
+             tradesForTable.length > 0 ? (
             <>
                 <div className="space-y-2">
                     <div className="flex justify-between items-center">
