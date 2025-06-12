@@ -80,6 +80,37 @@ export default function DashboardPage() {
   const [lossLimitReached, setLossLimitReached] = useState(false);
   const [tradingOutsideHours, setTradingOutsideHours] = useState(false); 
 
+  // Moved useMemo hooks before any conditional returns
+  const periodChartTitle = useMemo(() => {
+    const today = new Date();
+    if (selectedDate && isValid(selectedDate)) {
+      if (format(selectedDate, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd')) {
+        return "Trades do Dia de Hoje";
+      }
+      return `Trades do Dia: ${format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}`;
+    }
+    return "Trades do Dia de Hoje";
+  }, [selectedDate]);
+
+  const periodChartDescription = useMemo(() => {
+    const today = new Date();
+    if (selectedDate && isValid(selectedDate)) {
+      if (format(selectedDate, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd')) {
+        return "Trades individuais do dia de hoje.";
+      }
+      return "Trades individuais do dia selecionado.";
+    }
+    return "Trades individuais do dia de hoje.";
+  }, [selectedDate]);
+
+  const summaryTitle = useMemo(() => selectedDate && isValid(selectedDate) 
+    ? `Resumo de ${format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}` 
+    : "Resumo do Dia de Hoje", [selectedDate]);
+  
+  const resultTitle = useMemo(() => selectedDate && isValid(selectedDate)
+    ? `Resultado de ${format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}`
+    : "Resultado do Dia", [selectedDate]);
+
   useEffect(() => {
     if (!userId) {
         setIsLoading(false);
@@ -149,8 +180,7 @@ export default function DashboardPage() {
       }
     };
     fetchDashboardData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
+  }, [userId, setDailyResult, setIsLoadingDailyResult]); // Added context setters as they are used in the early return
 
   useEffect(() => {
     if (isLoading) {
@@ -262,7 +292,6 @@ export default function DashboardPage() {
       setDailyTradesChartData([]); 
     }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allTrades, selectedDate, isLoading, userId, setDailyResult, setIsLoadingDailyResult]);
 
   useEffect(() => {
@@ -278,8 +307,7 @@ export default function DashboardPage() {
       setDailyResult(null);
       setIsLoadingDailyResult(true); 
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [setDailyResult, setIsLoadingDailyResult]); // Added stable dependencies
 
 
   if (!user && !isLoading) return (
@@ -314,38 +342,7 @@ export default function DashboardPage() {
     </Card>
   );
   
-  const periodChartTitle = useMemo(() => {
-    const today = new Date();
-    if (selectedDate && isValid(selectedDate)) {
-      if (format(selectedDate, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd')) {
-        return "Trades do Dia de Hoje";
-      }
-      return `Trades do Dia: ${format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}`;
-    }
-    return "Trades do Dia de Hoje";
-  }, [selectedDate]);
-
-  const periodChartDescription = useMemo(() => {
-    const today = new Date();
-    if (selectedDate && isValid(selectedDate)) {
-      if (format(selectedDate, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd')) {
-        return "Trades individuais do dia de hoje.";
-      }
-      return "Trades individuais do dia selecionado.";
-    }
-    return "Trades individuais do dia de hoje.";
-  }, [selectedDate]);
-
   const noTradesForChart = dailyTradesChartData.length === 0;
-
-
-  const summaryTitle = selectedDate && isValid(selectedDate) 
-    ? `Resumo de ${format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}` 
-    : "Resumo do Dia de Hoje";
-  
-  const resultTitle = selectedDate && isValid(selectedDate)
-    ? `Resultado de ${format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}`
-    : "Resultado do Dia";
 
 
   return (
@@ -574,3 +571,4 @@ export default function DashboardPage() {
   );
 }
 
+    
