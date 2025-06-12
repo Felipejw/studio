@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Percent, FileText, AlertTriangle, TrendingUp, Smile, BarChart, Loader2, DollarSign, Lightbulb, LineChartIcon, CalendarIcon, Clock, Tag, CheckCircle, XCircle, PlusCircle, Brain } from 'lucide-react'; // Added PlusCircle, Brain, CheckCircle, XCircle
+import { Percent, FileText, AlertTriangle, TrendingUp, Smile, BarChart, Loader2, DollarSign, Lightbulb, LineChartIcon, CalendarIcon, Clock, Tag, CheckCircle, XCircle, PlusCircle, Brain, TrendingDown, Minus } from 'lucide-react'; // Added TrendingDown, Minus
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/components/auth-provider';
 import { ResponsiveContainer, LineChart as RechartsLineChart, XAxis, YAxis, Tooltip as RechartsTooltip, Line as RechartsLine, CartesianGrid, BarChart as RechartsBarChart, Bar as RechartsBar, Cell } from 'recharts';
@@ -20,11 +20,11 @@ import { useDashboardHeader } from '@/contexts/dashboard-header-context';
 
 interface TradeEntryFirestore {
   userId: string;
-  date: Timestamp; 
+  date: Timestamp;
   asset: string;
   type: 'compra' | 'venda';
   result: 'gain' | 'loss' | 'zero';
-  profit: number; 
+  profit: number;
   period: 'manhã' | 'tarde' | 'noite';
   setup?: string;
   emotionBefore: number;
@@ -34,7 +34,7 @@ interface TradeEntryFirestore {
 
 interface TradeEntry extends Omit<TradeEntryFirestore, 'date'> {
   id: string;
-  date: Date; 
+  date: Date;
 }
 
 interface RiskSettings {
@@ -57,7 +57,7 @@ export default function DashboardPage() {
   const { setDailyResult, setIsLoadingDailyResult } = useDashboardHeader();
 
   const [isLoading, setIsLoading] = useState(true);
-  
+
   const [allTrades, setAllTrades] = useState<TradeEntry[]>([]);
   const [riskSettings, setRiskSettings] = useState<RiskSettings | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
@@ -73,18 +73,18 @@ export default function DashboardPage() {
   // States for metrics based on last 7 days (performance)
   const [winRate7Days, setWinRate7Days] = useState(0);
   const [avgRiskReward7Days, setAvgRiskReward7Days] = useState<string>("N/A");
-  const [dailyTradesChartData, setDailyTradesChartData] = useState<Array<{ day: string; pl: number; asset?: string }>>([]); // Changed from weeklyPLChartData
+  const [dailyTradesChartData, setDailyTradesChartData] = useState<Array<{ day: string; pl: number; asset?: string }>>([]);
   const [winningTrades7DaysCount, setWinningTrades7DaysCount] = useState(0);
   const [losingTrades7DaysCount, setLosingTrades7DaysCount] = useState(0);
-  
-  const [lossLimitReached, setLossLimitReached] = useState(false);
-  const [tradingOutsideHours, setTradingOutsideHours] = useState(false); 
 
-  // Moved useMemo hooks before any conditional returns
+  const [lossLimitReached, setLossLimitReached] = useState(false);
+  const [tradingOutsideHours, setTradingOutsideHours] = useState(false);
+
+
   const periodChartTitle = useMemo(() => {
-    const today = new Date();
+    const todayDate = new Date();
     if (selectedDate && isValid(selectedDate)) {
-      if (format(selectedDate, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd')) {
+      if (format(selectedDate, 'yyyy-MM-dd') === format(todayDate, 'yyyy-MM-dd')) {
         return "Trades do Dia de Hoje";
       }
       return `Trades do Dia: ${format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}`;
@@ -93,9 +93,9 @@ export default function DashboardPage() {
   }, [selectedDate]);
 
   const periodChartDescription = useMemo(() => {
-    const today = new Date();
+    const todayDate = new Date();
     if (selectedDate && isValid(selectedDate)) {
-      if (format(selectedDate, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd')) {
+      if (format(selectedDate, 'yyyy-MM-dd') === format(todayDate, 'yyyy-MM-dd')) {
         return "Trades individuais do dia de hoje.";
       }
       return "Trades individuais do dia selecionado.";
@@ -103,10 +103,10 @@ export default function DashboardPage() {
     return "Trades individuais do dia de hoje.";
   }, [selectedDate]);
 
-  const summaryTitle = useMemo(() => selectedDate && isValid(selectedDate) 
-    ? `Resumo de ${format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}` 
+  const summaryTitle = useMemo(() => selectedDate && isValid(selectedDate)
+    ? `Resumo de ${format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}`
     : "Resumo do Dia de Hoje", [selectedDate]);
-  
+
   const resultTitle = useMemo(() => selectedDate && isValid(selectedDate)
     ? `Resultado de ${format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}`
     : "Resultado do Dia", [selectedDate]);
@@ -137,9 +137,9 @@ export default function DashboardPage() {
       setIsLoading(true);
       setIsLoadingDailyResult(true);
       try {
-        const today = new Date();
-        const fetchDataSince = subDays(startOfWeek(today, { locale: ptBR }), 8); 
-        
+        const todayDate = new Date();
+        const fetchDataSince = subDays(startOfWeek(todayDate, { locale: ptBR }), 8);
+
         const tradesQuery = query(
           collection(db, "trades"),
           where("userId", "==", userId),
@@ -151,10 +151,10 @@ export default function DashboardPage() {
         tradesSnapshot.forEach((docSnap) => {
             const data = docSnap.data() as Partial<TradeEntryFirestore>;
             if (data.date && typeof (data.date as any).toDate === 'function') {
-                 fetchedTrades.push({ 
-                    ...(data as TradeEntryFirestore), 
+                 fetchedTrades.push({
+                    ...(data as TradeEntryFirestore),
                     id: docSnap.id,
-                    date: (data.date as Timestamp).toDate() 
+                    date: (data.date as Timestamp).toDate()
                 } as TradeEntry);
             }
         });
@@ -167,7 +167,7 @@ export default function DashboardPage() {
         } else {
             setRiskSettings(null);
         }
-        
+
         setTradingOutsideHours(false);
 
       } catch (error) {
@@ -176,11 +176,11 @@ export default function DashboardPage() {
         setRiskSettings(null);
       } finally {
         setIsLoading(false);
-        setIsLoadingDailyResult(false);
+        // setIsLoadingDailyResult will be set to false in the processing useEffect
       }
     };
     fetchDashboardData();
-  }, [userId, setDailyResult, setIsLoadingDailyResult]); // Added context setters as they are used in the early return
+  }, [userId, setIsLoadingDailyResult, setDailyResult]);
 
   useEffect(() => {
     if (isLoading) {
@@ -188,26 +188,26 @@ export default function DashboardPage() {
         return;
     }
 
-    const today = new Date();
-    const periodDate = selectedDate || today;
-    const startOfPeriod = startOfDay(periodDate);
-    const endOfPeriod = endOfDay(periodDate);
+    const localToday = new Date(); // Use a fresh 'today' for this calculation run
+    const periodDateToProcess = selectedDate || localToday;
+    const startOfPeriod = startOfDay(periodDateToProcess);
+    const endOfPeriod = endOfDay(periodDateToProcess);
 
     const tradesForSelectedPeriod = allTrades.filter(trade => {
+        if (!(trade.date instanceof Date) || isNaN(trade.date.getTime())) return false;
         const tradeDate = trade.date;
         return tradeDate >= startOfPeriod && tradeDate <= endOfPeriod;
     });
 
     setTradesForPeriodCount(tradesForSelectedPeriod.length);
-    const plForPeriod = tradesForSelectedPeriod.reduce((sum, trade) => sum + trade.profit, 0);
+    const plForPeriod = tradesForSelectedPeriod.reduce((sum, trade) => sum + (typeof trade.profit === 'number' ? trade.profit : 0), 0);
     setProfitOrLossForPeriod(plForPeriod);
-    
-    if (!selectedDate || format(selectedDate, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd')) {
+
+    if (!selectedDate || format(selectedDate, 'yyyy-MM-dd') === format(localToday, 'yyyy-MM-dd')) {
       setDailyResult(plForPeriod);
     } else if (selectedDate) {
       setDailyResult(plForPeriod);
     }
-    setIsLoadingDailyResult(isLoading);
 
 
     const winningTradesForPeriod = tradesForSelectedPeriod.filter(t => t.profit > 0);
@@ -239,14 +239,15 @@ export default function DashboardPage() {
 
     // Calculate metrics for the actual last 7 days (rolling)
     const todayFor7DayMetrics = new Date();
-    const actualSevenDaysAgoDate = startOfDay(subDays(todayFor7DayMetrics, 6)); 
+    const actualSevenDaysAgoDate = startOfDay(subDays(todayFor7DayMetrics, 6));
     const endOfTodayFor7DayMetrics = endOfDay(todayFor7DayMetrics);
 
     const tradesActuallyLast7Days = allTrades.filter(trade => {
+        if (!(trade.date instanceof Date) || isNaN(trade.date.getTime())) return false;
         const tradeDate = trade.date;
         return tradeDate >= actualSevenDaysAgoDate && tradeDate <= endOfTodayFor7DayMetrics;
     });
-    
+
     const winningTradesActual7 = tradesActuallyLast7Days.filter(t => t.profit > 0);
     const losingTradesActual7 = tradesActuallyLast7Days.filter(t => t.profit < 0);
     setWinningTrades7DaysCount(winningTradesActual7.length);
@@ -262,7 +263,7 @@ export default function DashboardPage() {
     const totalLossAmountActual7 = losingTradesActual7.reduce((sum, t) => sum + Math.abs(t.profit), 0);
     const avgWinActual7 = winningTradesActual7.length > 0 ? totalWinAmountActual7 / winningTradesActual7.length : 0;
     const avgLossActual7 = losingTradesActual7.length > 0 ? totalLossAmountActual7 / losingTradesActual7.length : 0;
-    
+
     if (avgLossActual7 > 0) {
         setAvgRiskReward7Days(`${(avgWinActual7 / avgLossActual7).toFixed(2)}:1`);
     } else if (avgWinActual7 > 0) {
@@ -272,25 +273,26 @@ export default function DashboardPage() {
     }
 
     // Daily Trades Chart Data
-    const targetDateForChart = selectedDate || today; 
     const tradesForChartDay = allTrades
       .filter(trade => {
+        if (!(trade.date instanceof Date) || isNaN(trade.date.getTime())) return false;
         const tradeDayStart = startOfDay(trade.date);
-        const targetDayStart = startOfDay(targetDateForChart);
+        const targetDayStart = startOfDay(periodDateToProcess); // Use periodDateToProcess
         return tradeDayStart.getTime() === targetDayStart.getTime();
       })
       .sort((a,b) => a.date.getTime() - b.date.getTime());
 
     if (tradesForChartDay.length > 0) {
       const chartData = tradesForChartDay.map(trade => ({
-        day: format(trade.date, 'HH:mm'), 
-        pl: trade.profit,
+        day: format(trade.date, 'HH:mm'),
+        pl: typeof trade.profit === 'number' ? trade.profit : 0,
         asset: trade.asset,
       }));
       setDailyTradesChartData(chartData);
     } else {
-      setDailyTradesChartData([]); 
+      setDailyTradesChartData([]);
     }
+    setIsLoadingDailyResult(false); // All calculations done
 
   }, [allTrades, selectedDate, isLoading, userId, setDailyResult, setIsLoadingDailyResult]);
 
@@ -301,13 +303,13 @@ export default function DashboardPage() {
         setLossLimitReached(false);
     }
   }, [profitOrLossForPeriod, riskSettings]);
-  
+
   useEffect(() => {
     return () => {
       setDailyResult(null);
-      setIsLoadingDailyResult(true); 
+      setIsLoadingDailyResult(true);
     };
-  }, [setDailyResult, setIsLoadingDailyResult]); // Added stable dependencies
+  }, [setDailyResult, setIsLoadingDailyResult]);
 
 
   if (!user && !isLoading) return (
@@ -316,7 +318,7 @@ export default function DashboardPage() {
         <Button asChild className="mt-4"><Link href="/login">Login</Link></Button>
     </div>
   );
-   if (isLoading && !allTrades.length) return ( 
+   if (isLoading && allTrades.length === 0) return (
      <div className="flex h-[calc(100vh-100px)] w-full items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
      </div>
@@ -330,7 +332,7 @@ export default function DashboardPage() {
         {icon}
       </CardHeader>
       <CardContent>
-        {isLoadingCard && value === "..." ? ( 
+        {isLoadingCard && value === "..." ? (
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
         ) : (
           <>
@@ -341,7 +343,7 @@ export default function DashboardPage() {
       </CardContent>
     </Card>
   );
-  
+
   const noTradesForChart = dailyTradesChartData.length === 0;
 
 
@@ -369,10 +371,10 @@ export default function DashboardPage() {
                   selected={selectedDate}
                   onSelect={(date) => {
                     setSelectedDate(date);
-                    if (!date) { 
-                        const today = new Date();
-                        const startOfToday = startOfDay(today);
-                        const endOfToday = endOfDay(today);
+                    if (!date) {
+                        const todayDate = new Date();
+                        const startOfToday = startOfDay(todayDate);
+                        const endOfToday = endOfDay(todayDate);
                         const tradesForToday = allTrades.filter(trade => trade.date >= startOfToday && trade.date <= endOfToday);
                         const plForToday = tradesForToday.reduce((sum, trade) => sum + trade.profit, 0);
                         setDailyResult(plForToday);
@@ -386,13 +388,13 @@ export default function DashboardPage() {
             </Popover>
             {selectedDate && <Button variant="ghost" onClick={() => {
                 setSelectedDate(undefined);
-                const today = new Date();
-                const startOfToday = startOfDay(today);
-                const endOfToday = endOfDay(today);
+                const todayDate = new Date();
+                const startOfToday = startOfDay(todayDate);
+                const endOfToday = endOfDay(todayDate);
                 const tradesForToday = allTrades.filter(trade => trade.date >= startOfToday && trade.date <= endOfToday);
                 const plForToday = tradesForToday.reduce((sum, trade) => sum + trade.profit, 0);
                 setDailyResult(plForToday);
-                setIsLoadingDailyResult(isLoading); 
+                // setIsLoadingDailyResult(isLoading); // isLoadingDailyResult is managed by the processing useEffect
             }}>Limpar filtro</Button>}
         </div>
       </div>
@@ -459,7 +461,7 @@ export default function DashboardPage() {
             <CardDescription className="text-sm">{periodChartDescription}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {isLoading && allTrades.length === 0 ? (
+            {(isLoading && allTrades.length === 0) ? (
               <div className="flex items-center justify-center py-10">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 <p className="ml-3">Carregando dados do gráfico...</p>
@@ -468,15 +470,15 @@ export default function DashboardPage() {
                 <p className="text-center text-muted-foreground py-10">
                   Nenhum trade registrado para {selectedDate ? format(selectedDate, "dd/MM/yyyy", { locale: ptBR }) : "o dia de hoje"}.
                 </p>
-            ) : ( 
+            ) : (
                 <ChartContainer config={chartConfig} className="h-[250px] w-full">
                   <RechartsBarChart data={dailyTradesChartData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
                     <XAxis dataKey="day" tickLine={false} axisLine={false} tickMargin={8} interval={0} />
                     <YAxis tickLine={false} axisLine={false} tickMargin={8} width={40}/>
-                    <RechartsTooltip 
+                    <RechartsTooltip
                         cursor={true}
-                        content={<ChartTooltipContent indicator="line" />} 
+                        content={<ChartTooltipContent indicator="line" />}
                         formatter={(value: number, name: string, props: any) => [`R$ ${value.toFixed(2)} (${props.payload.asset || 'N/A'})`, "Resultado"]}
                     />
                     <RechartsBar dataKey="pl" name="Resultado">
@@ -490,7 +492,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
-      
+
       <div className="grid gap-6 md:grid-cols-2 mt-6">
          <Card className="md:col-span-1 shadow-md hover:shadow-lg transition-shadow duration-300">
           <CardHeader>
@@ -540,7 +542,7 @@ export default function DashboardPage() {
                           </AlertDescription>
                         </Alert>
                       )}
-                      {tradingOutsideHours && ( 
+                      {tradingOutsideHours && (
                         <Alert variant="destructive" className="shadow-sm">
                           <AlertTriangle className="h-4 w-4" />
                           <AlertTitle>Operando Fora do Horário!</AlertTitle>
@@ -570,5 +572,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    
