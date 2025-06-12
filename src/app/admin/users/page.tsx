@@ -537,12 +537,12 @@ export default function AdminUsersPage() {
           </DialogContent>
         </Dialog>
 
-        <Card className="mt-8 bg-yellow-50 border-yellow-300 dark:bg-yellow-900/30 dark:border-yellow-700">
+        <Card className="mt-8 bg-green-50 border-green-400 dark:bg-green-900/30 dark:border-green-700">
           <CardHeader className="flex-row items-center gap-2 pb-2">
-            <ShieldAlert className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
-            <CardTitle className="text-lg text-yellow-700 dark:text-yellow-300">Notas Importantes</CardTitle>
+            <ShieldAlert className="h-5 w-5 text-green-600 dark:text-green-400" />
+            <CardTitle className="text-lg text-green-700 dark:text-green-300">Notas Importantes</CardTitle>
           </CardHeader>
-          <CardContent className="text-yellow-700 dark:text-yellow-400 text-sm space-y-1">
+          <CardContent className="text-green-700 dark:text-green-400 text-sm space-y-1">
             <p><strong>Gerenciamento de Acesso:</strong> Para desabilitar/habilitar o acesso de um usuário (login), utilize o console do Firebase Authentication.</p>
             <p><strong>Exclusão de Usuário:</strong> A exclusão aqui remove todos os dados do usuário do Firestore. A conta de autenticação (login) deve ser removida manualmente no console do Firebase.</p>
             <p><strong>Impacto das Alterações:</strong> Mudanças de plano e último pagamento aqui afetam o acesso do usuário aos recursos da plataforma e informações de assinatura.</p>
@@ -552,3 +552,4 @@ export default function AdminUsersPage() {
     </div>
   );
 }
+
