@@ -46,16 +46,6 @@ interface RiskSettings {
   updatedAt: Date;
 }
 
-const initialWeeklyPLDataTemplate = [
-  { day: 'Dom', pl: 0 },
-  { day: 'Seg', pl: 0 },
-  { day: 'Ter', pl: 0 },
-  { day: 'Qua', pl: 0 },
-  { day: 'Qui', pl: 0 },
-  { day: 'Sex', pl: 0 },
-  { day: 'Sáb', pl: 0 },
-];
-
 const chartConfig = {
   pl: { label: "P/L", color: "hsl(var(--chart-1))" },
   profit: { label: "P/L", color: "hsl(var(--chart-1))" }, // Alias for consistency
@@ -83,7 +73,7 @@ export default function DashboardPage() {
   // States for metrics based on last 7 days (performance)
   const [winRate7Days, setWinRate7Days] = useState(0);
   const [avgRiskReward7Days, setAvgRiskReward7Days] = useState<string>("N/A");
-  const [weeklyPLChartData, setWeeklyPLChartData] = useState(initialWeeklyPLDataTemplate);
+  const [dailyTradesChartData, setDailyTradesChartData] = useState<Array<{ day: string; pl: number; asset?: string }>>([]); // Changed from weeklyPLChartData
   const [winningTrades7DaysCount, setWinningTrades7DaysCount] = useState(0);
   const [losingTrades7DaysCount, setLosingTrades7DaysCount] = useState(0);
   
@@ -103,7 +93,7 @@ export default function DashboardPage() {
         setWinRateForPeriod(0);
         setWinRate7Days(0);
         setAvgRiskReward7Days("N/A");
-        setWeeklyPLChartData(initialWeeklyPLDataTemplate);
+        setDailyTradesChartData([]);
         setWinningTrades7DaysCount(0);
         setLosingTrades7DaysCount(0);
         setLossLimitReached(false);
@@ -117,8 +107,7 @@ export default function DashboardPage() {
       setIsLoadingDailyResult(true);
       try {
         const today = new Date();
-        // Fetch data for roughly the last 1.5-2 weeks to cover 7-day calcs and weekly chart
-        const fetchDataSince = subDays(startOfWeek(today, { locale: ptBR }), 8); // Go back a bit further to ensure enough data for rolling 7 days
+        const fetchDataSince = subDays(startOfWeek(today, { locale: ptBR }), 8); 
         
         const tradesQuery = query(
           collection(db, "trades"),
@@ -220,7 +209,7 @@ export default function DashboardPage() {
 
     // Calculate metrics for the actual last 7 days (rolling)
     const todayFor7DayMetrics = new Date();
-    const actualSevenDaysAgoDate = startOfDay(subDays(todayFor7DayMetrics, 6)); // Includes today
+    const actualSevenDaysAgoDate = startOfDay(subDays(todayFor7DayMetrics, 6)); 
     const endOfTodayFor7DayMetrics = endOfDay(todayFor7DayMetrics);
 
     const tradesActuallyLast7Days = allTrades.filter(trade => {
@@ -252,31 +241,25 @@ export default function DashboardPage() {
         setAvgRiskReward7Days("N/A");
     }
 
+    // Daily Trades Chart Data
+    const targetDateForChart = selectedDate || today; 
+    const tradesForChartDay = allTrades
+      .filter(trade => {
+        const tradeDayStart = startOfDay(trade.date);
+        const targetDayStart = startOfDay(targetDateForChart);
+        return tradeDayStart.getTime() === targetDayStart.getTime();
+      })
+      .sort((a,b) => a.date.getTime() - b.date.getTime());
 
-    // Weekly P/L Chart Data Logic (remains mostly the same)
-    if (selectedDate && isValid(selectedDate)) {
-        const tradesOnSelectedDay = allTrades
-            .filter(trade => trade.date >= startOfDay(selectedDate) && trade.date <= endOfDay(selectedDate))
-            .sort((a,b) => a.date.getTime() - b.date.getTime());
-        
-        const chartDataForDay = tradesOnSelectedDay.map(trade => ({
-            day: format(trade.date, 'HH:mm'), 
-            pl: trade.profit,
-            asset: trade.asset
-        }));
-        setWeeklyPLChartData(chartDataForDay);
+    if (tradesForChartDay.length > 0) {
+      const chartData = tradesForChartDay.map(trade => ({
+        day: format(trade.date, 'HH:mm'), 
+        pl: trade.profit,
+        asset: trade.asset,
+      }));
+      setDailyTradesChartData(chartData);
     } else {
-        const weekStartDate = startOfWeek(today, { locale: ptBR });
-        const currentWeekDays = eachDayOfInterval({ start: weekStartDate, end: endOfWeek(today, { locale: ptBR }) });
-        const newWeeklyPLData = currentWeekDays.map(dayDate => {
-            const dayKey = format(dayDate, 'EEE', { locale: ptBR });
-            const tradesOnThisDay = allTrades.filter(trade => 
-                trade.date >= startOfDay(dayDate) && trade.date <= endOfDay(dayDate)
-            );
-            const totalPL = tradesOnThisDay.reduce((sum, trade) => sum + trade.profit, 0);
-            return { day: dayKey.charAt(0).toUpperCase() + dayKey.slice(1), pl: totalPL };
-        });
-        setWeeklyPLChartData(newWeeklyPLData);
+      setDailyTradesChartData([]); 
     }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -331,11 +314,30 @@ export default function DashboardPage() {
     </Card>
   );
   
-  const periodChartTitle = selectedDate && isValid(selectedDate)
-    ? `Trades do Dia: ${format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}`
-    : "Resultado Semanal";
+  const periodChartTitle = useMemo(() => {
+    const today = new Date();
+    if (selectedDate && isValid(selectedDate)) {
+      if (format(selectedDate, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd')) {
+        return "Trades do Dia de Hoje";
+      }
+      return `Trades do Dia: ${format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}`;
+    }
+    return "Trades do Dia de Hoje";
+  }, [selectedDate]);
 
-  const noTradesForChart = weeklyPLChartData.length === 0 || weeklyPLChartData.every(item => item.pl === 0);
+  const periodChartDescription = useMemo(() => {
+    const today = new Date();
+    if (selectedDate && isValid(selectedDate)) {
+      if (format(selectedDate, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd')) {
+        return "Trades individuais do dia de hoje.";
+      }
+      return "Trades individuais do dia selecionado.";
+    }
+    return "Trades individuais do dia de hoje.";
+  }, [selectedDate]);
+
+  const noTradesForChart = dailyTradesChartData.length === 0;
+
 
   const summaryTitle = selectedDate && isValid(selectedDate) 
     ? `Resumo de ${format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}` 
@@ -457,9 +459,7 @@ export default function DashboardPage() {
         <Card className="md:col-span-3 shadow-md hover:shadow-lg transition-shadow duration-300">
           <CardHeader>
             <CardTitle className="font-headline text-lg">{periodChartTitle}</CardTitle>
-            <CardDescription className="text-sm">
-                {selectedDate && isValid(selectedDate) ? "Trades individuais do dia selecionado." : "P/L agregado de cada dia da semana atual."}
-            </CardDescription>
+            <CardDescription className="text-sm">{periodChartDescription}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {isLoading && allTrades.length === 0 ? (
@@ -469,42 +469,25 @@ export default function DashboardPage() {
               </div>
             ) : noTradesForChart ? (
                 <p className="text-center text-muted-foreground py-10">
-                    {selectedDate && isValid(selectedDate)
-                        ? `Nenhum trade registrado para ${format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}.`
-                        : "Nenhum trade registrado nesta semana para exibir o gráfico."
-                    }
+                  Nenhum trade registrado para {selectedDate ? format(selectedDate, "dd/MM/yyyy", { locale: ptBR }) : "o dia de hoje"}.
                 </p>
-            ) : selectedDate && isValid(selectedDate) ? ( 
+            ) : ( 
                 <ChartContainer config={chartConfig} className="h-[250px] w-full">
-                  <RechartsBarChart data={weeklyPLChartData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
+                  <RechartsBarChart data={dailyTradesChartData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
                     <XAxis dataKey="day" tickLine={false} axisLine={false} tickMargin={8} interval={0} />
                     <YAxis tickLine={false} axisLine={false} tickMargin={8} width={40}/>
                     <RechartsTooltip 
                         cursor={true}
                         content={<ChartTooltipContent indicator="line" />} 
-                        formatter={(value: number, name: string, props: any) => [`R$ ${value.toFixed(2)} (${props.payload.asset})`, "Resultado"]}
+                        formatter={(value: number, name: string, props: any) => [`R$ ${value.toFixed(2)} (${props.payload.asset || 'N/A'})`, "Resultado"]}
                     />
                     <RechartsBar dataKey="pl" name="Resultado">
-                        {weeklyPLChartData.map((entry, index) => (
+                        {dailyTradesChartData.map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={entry.pl >= 0 ? "hsl(var(--chart-2))" : "hsl(var(--destructive))"} />
                         ))}
                     </RechartsBar>
                   </RechartsBarChart>
-                </ChartContainer>
-            ) : ( 
-                <ChartContainer config={chartConfig} className="h-[250px] w-full">
-                    <RechartsLineChart accessibilityLayer data={weeklyPLChartData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
-                    <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                    <XAxis dataKey="day" tickLine={false} axisLine={false} tickMargin={8} />
-                    <YAxis tickLine={false} axisLine={false} tickMargin={8} width={40}/>
-                    <RechartsTooltip 
-                        cursor={true}
-                        content={<ChartTooltipContent indicator="line" />} 
-                        formatter={(value: number) => `R$ ${value.toFixed(2)}`}
-                    />
-                    <RechartsLine dataKey="pl" type="monotone" stroke="var(--color-pl)" strokeWidth={2.5} dot={{ r: 5, fill: "var(--color-pl)", strokeWidth:1, stroke: "hsl(var(--background))" }} activeDot={{r: 7, strokeWidth: 2}} name="P/L"/>
-                    </RechartsLineChart>
                 </ChartContainer>
             )}
           </CardContent>
