@@ -5,13 +5,13 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Percent, FileText, AlertTriangle, TrendingUp, Smile, BarChart, Loader2, DollarSign, Lightbulb, LineChartIcon, CalendarIcon, Clock, Tag, CheckCircle, XCircle, PlusCircle, Brain, TrendingDown, Minus } from 'lucide-react'; // Added TrendingDown, Minus
+import { Percent, FileText, AlertTriangle, TrendingUp, Smile, BarChart, Loader2, DollarSign, Lightbulb, LineChartIcon, CalendarIcon, Clock, Tag, CheckCircle, XCircle, PlusCircle, Brain, TrendingDown, Minus } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/components/auth-provider';
-import { ResponsiveContainer, LineChart as RechartsLineChart, XAxis, YAxis, Tooltip as RechartsTooltip, Line as RechartsLine, CartesianGrid, BarChart as RechartsBarChart, Bar as RechartsBar, Cell } from 'recharts';
+import { ResponsiveContainer, BarChart as RechartsBarChart, XAxis, YAxis, Tooltip as RechartsTooltip, Bar as RechartsBar, Cell, CartesianGrid } from 'recharts';
 import { ChartContainer, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { db, collection, query, where, orderBy, getDocs, Timestamp, doc, getDoc } from '@/lib/firebase';
-import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, eachDayOfInterval, subDays, parseISO, isValid } from 'date-fns';
+import { format, startOfDay, endOfDay, startOfWeek, subDays, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -48,7 +48,7 @@ interface RiskSettings {
 
 const chartConfig = {
   pl: { label: "P/L", color: "hsl(var(--chart-1))" },
-  profit: { label: "P/L", color: "hsl(var(--chart-1))" }, // Alias for consistency
+  profit: { label: "P/L", color: "hsl(var(--chart-1))" }, 
 } satisfies ChartConfig;
 
 
@@ -57,12 +57,10 @@ export default function DashboardPage() {
   const { setDailyResult, setIsLoadingDailyResult } = useDashboardHeader();
 
   const [isLoading, setIsLoading] = useState(true);
-
   const [allTrades, setAllTrades] = useState<TradeEntry[]>([]);
   const [riskSettings, setRiskSettings] = useState<RiskSettings | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
 
-  // States for metrics based on selectedDate or today
   const [tradesForPeriodCount, setTradesForPeriodCount] = useState(0);
   const [profitOrLossForPeriod, setProfitOrLossForPeriod] = useState(0);
   const [averageEmotionForPeriod, setAverageEmotionForPeriod] = useState<string | null>(null);
@@ -70,16 +68,14 @@ export default function DashboardPage() {
   const [mostTradedPeriodForPeriod, setMostTradedPeriodForPeriod] = useState<string>("N/A");
   const [winRateForPeriod, setWinRateForPeriod] = useState(0);
 
-  // States for metrics based on last 7 days (performance)
   const [winRate7Days, setWinRate7Days] = useState(0);
   const [avgRiskReward7Days, setAvgRiskReward7Days] = useState<string>("N/A");
-  const [dailyTradesChartData, setDailyTradesChartData] = useState<Array<{ day: string; pl: number; asset?: string }>>([]);
+  const [dailyTradesChartData, setDailyTradesChartData] = useState<Array<{ timeLabel: string; pl: number; asset?: string }>>([]);
   const [winningTrades7DaysCount, setWinningTrades7DaysCount] = useState(0);
   const [losingTrades7DaysCount, setLosingTrades7DaysCount] = useState(0);
 
   const [lossLimitReached, setLossLimitReached] = useState(false);
   const [tradingOutsideHours, setTradingOutsideHours] = useState(false);
-
 
   const periodChartTitle = useMemo(() => {
     const todayDate = new Date();
@@ -137,13 +133,12 @@ export default function DashboardPage() {
       setIsLoading(true);
       setIsLoadingDailyResult(true);
       try {
-        const todayDate = new Date();
-        const fetchDataSince = subDays(startOfWeek(todayDate, { locale: ptBR }), 8);
+        const thirtyDaysAgo = subDays(new Date(), 30);
 
         const tradesQuery = query(
           collection(db, "trades"),
           where("userId", "==", userId),
-          where("date", ">=", Timestamp.fromDate(fetchDataSince)),
+          where("date", ">=", Timestamp.fromDate(thirtyDaysAgo)),
           orderBy("date", "desc")
         );
         const tradesSnapshot = await getDocs(tradesQuery);
@@ -167,28 +162,25 @@ export default function DashboardPage() {
         } else {
             setRiskSettings(null);
         }
-
-        setTradingOutsideHours(false);
-
+        setTradingOutsideHours(false); 
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
         setAllTrades([]);
         setRiskSettings(null);
       } finally {
         setIsLoading(false);
-        // setIsLoadingDailyResult will be set to false in the processing useEffect
       }
     };
     fetchDashboardData();
   }, [userId, setIsLoadingDailyResult, setDailyResult]);
 
   useEffect(() => {
-    if (isLoading) {
+    if (isLoading) { // If still loading initial data, defer processing
         setIsLoadingDailyResult(true);
         return;
     }
 
-    const localToday = new Date(); // Use a fresh 'today' for this calculation run
+    const localToday = new Date(); 
     const periodDateToProcess = selectedDate || localToday;
     const startOfPeriod = startOfDay(periodDateToProcess);
     const endOfPeriod = endOfDay(periodDateToProcess);
@@ -203,9 +195,8 @@ export default function DashboardPage() {
     const plForPeriod = tradesForSelectedPeriod.reduce((sum, trade) => sum + (typeof trade.profit === 'number' ? trade.profit : 0), 0);
     setProfitOrLossForPeriod(plForPeriod);
 
-    if (!selectedDate || format(selectedDate, 'yyyy-MM-dd') === format(localToday, 'yyyy-MM-dd')) {
-      setDailyResult(plForPeriod);
-    } else if (selectedDate) {
+    // Update header P/L only if it's for today or a selected date
+    if (!selectedDate || format(selectedDate, 'yyyy-MM-dd') === format(localToday, 'yyyy-MM-dd') || selectedDate) {
       setDailyResult(plForPeriod);
     }
 
@@ -237,7 +228,6 @@ export default function DashboardPage() {
         setMostTradedPeriodForPeriod("N/A");
     }
 
-    // Calculate metrics for the actual last 7 days (rolling)
     const todayFor7DayMetrics = new Date();
     const actualSevenDaysAgoDate = startOfDay(subDays(todayFor7DayMetrics, 6));
     const endOfTodayFor7DayMetrics = endOfDay(todayFor7DayMetrics);
@@ -272,19 +262,18 @@ export default function DashboardPage() {
         setAvgRiskReward7Days("N/A");
     }
 
-    // Daily Trades Chart Data
     const tradesForChartDay = allTrades
       .filter(trade => {
         if (!(trade.date instanceof Date) || isNaN(trade.date.getTime())) return false;
         const tradeDayStart = startOfDay(trade.date);
-        const targetDayStart = startOfDay(periodDateToProcess); // Use periodDateToProcess
+        const targetDayStart = startOfDay(periodDateToProcess);
         return tradeDayStart.getTime() === targetDayStart.getTime();
       })
       .sort((a,b) => a.date.getTime() - b.date.getTime());
 
     if (tradesForChartDay.length > 0) {
       const chartData = tradesForChartDay.map(trade => ({
-        day: format(trade.date, 'HH:mm'),
+        timeLabel: format(trade.date, 'HH:mm'), // Use timeLabel for clarity
         pl: typeof trade.profit === 'number' ? trade.profit : 0,
         asset: trade.asset,
       }));
@@ -292,7 +281,7 @@ export default function DashboardPage() {
     } else {
       setDailyTradesChartData([]);
     }
-    setIsLoadingDailyResult(false); // All calculations done
+    setIsLoadingDailyResult(false);
 
   }, [allTrades, selectedDate, isLoading, userId, setDailyResult, setIsLoadingDailyResult]);
 
@@ -371,14 +360,7 @@ export default function DashboardPage() {
                   selected={selectedDate}
                   onSelect={(date) => {
                     setSelectedDate(date);
-                    if (!date) {
-                        const todayDate = new Date();
-                        const startOfToday = startOfDay(todayDate);
-                        const endOfToday = endOfDay(todayDate);
-                        const tradesForToday = allTrades.filter(trade => trade.date >= startOfToday && trade.date <= endOfToday);
-                        const plForToday = tradesForToday.reduce((sum, trade) => sum + trade.profit, 0);
-                        setDailyResult(plForToday);
-                    }
+                    // Logic to update dailyResult based on new selectedDate is handled by the main useEffect
                   }}
                   initialFocus
                   locale={ptBR}
@@ -388,13 +370,7 @@ export default function DashboardPage() {
             </Popover>
             {selectedDate && <Button variant="ghost" onClick={() => {
                 setSelectedDate(undefined);
-                const todayDate = new Date();
-                const startOfToday = startOfDay(todayDate);
-                const endOfToday = endOfDay(todayDate);
-                const tradesForToday = allTrades.filter(trade => trade.date >= startOfToday && trade.date <= endOfToday);
-                const plForToday = tradesForToday.reduce((sum, trade) => sum + trade.profit, 0);
-                setDailyResult(plForToday);
-                // setIsLoadingDailyResult(isLoading); // isLoadingDailyResult is managed by the processing useEffect
+                // Logic to update dailyResult when filter is cleared is handled by the main useEffect
             }}>Limpar filtro</Button>}
         </div>
       </div>
@@ -474,7 +450,7 @@ export default function DashboardPage() {
                 <ChartContainer config={chartConfig} className="h-[250px] w-full">
                   <RechartsBarChart data={dailyTradesChartData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                    <XAxis dataKey="day" tickLine={false} axisLine={false} tickMargin={8} interval={0} />
+                    <XAxis dataKey="timeLabel" tickLine={false} axisLine={false} tickMargin={8} interval={0} />
                     <YAxis tickLine={false} axisLine={false} tickMargin={8} width={40}/>
                     <RechartsTooltip
                         cursor={true}
@@ -483,7 +459,7 @@ export default function DashboardPage() {
                     />
                     <RechartsBar dataKey="pl" name="Resultado">
                         {dailyTradesChartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.pl >= 0 ? "hsl(var(--chart-2))" : "hsl(var(--destructive))"} />
+                            <Cell key={`cell-${index}-${entry.timeLabel}`} fill={entry.pl >= 0 ? "hsl(var(--chart-2))" : "hsl(var(--destructive))"} />
                         ))}
                     </RechartsBar>
                   </RechartsBarChart>
