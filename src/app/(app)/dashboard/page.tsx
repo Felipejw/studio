@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Percent, FileText, AlertTriangle, TrendingUp, Smile, BarChart, Loader2, DollarSign, Lightbulb, LineChartIcon, CalendarIcon, Clock, Tag, CheckCircle, XCircle, PlusCircle, Brain } from 'lucide-react'; // Added PlusCircle, Brain
+import { Percent, FileText, AlertTriangle, TrendingUp, Smile, BarChart, Loader2, DollarSign, Lightbulb, LineChartIcon, CalendarIcon, Clock, Tag, CheckCircle, XCircle, PlusCircle, Brain } from 'lucide-react'; // Added PlusCircle, Brain, CheckCircle, XCircle
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/components/auth-provider';
 import { ResponsiveContainer, LineChart as RechartsLineChart, XAxis, YAxis, Tooltip as RechartsTooltip, Line as RechartsLine, CartesianGrid, BarChart as RechartsBarChart, Bar as RechartsBar, Cell } from 'recharts';
@@ -117,12 +117,13 @@ export default function DashboardPage() {
       setIsLoadingDailyResult(true);
       try {
         const today = new Date();
-        const sevenDaysAgo = subDays(startOfWeek(today, { locale: ptBR }), 1); 
+        // Fetch data for roughly the last 1.5-2 weeks to cover 7-day calcs and weekly chart
+        const fetchDataSince = subDays(startOfWeek(today, { locale: ptBR }), 8); // Go back a bit further to ensure enough data for rolling 7 days
         
         const tradesQuery = query(
           collection(db, "trades"),
           where("userId", "==", userId),
-          where("date", ">=", Timestamp.fromDate(sevenDaysAgo)),
+          where("date", ">=", Timestamp.fromDate(fetchDataSince)),
           orderBy("date", "desc")
         );
         const tradesSnapshot = await getDocs(tradesQuery);
@@ -182,14 +183,11 @@ export default function DashboardPage() {
     const plForPeriod = tradesForSelectedPeriod.reduce((sum, trade) => sum + trade.profit, 0);
     setProfitOrLossForPeriod(plForPeriod);
     
-    // Update context for AppHeader
     if (!selectedDate || format(selectedDate, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd')) {
       setDailyResult(plForPeriod);
     } else if (selectedDate) {
-      // If a specific past date is selected, header shows that day's P/L
       setDailyResult(plForPeriod);
     }
-    // When no date selected (today) or when date changes, isLoadingDailyResult depends on main isLoading
     setIsLoadingDailyResult(isLoading);
 
 
@@ -220,35 +218,42 @@ export default function DashboardPage() {
         setMostTradedPeriodForPeriod("N/A");
     }
 
-    const weekStartDate = startOfWeek(today, { locale: ptBR });
-    const sevenDaysAgo = subDays(weekStartDate, 1); 
+    // Calculate metrics for the actual last 7 days (rolling)
+    const todayFor7DayMetrics = new Date();
+    const actualSevenDaysAgoDate = startOfDay(subDays(todayFor7DayMetrics, 6)); // Includes today
+    const endOfTodayFor7DayMetrics = endOfDay(todayFor7DayMetrics);
 
-    const tradesLast7Days = allTrades.filter(trade => trade.date >= sevenDaysAgo);
+    const tradesActuallyLast7Days = allTrades.filter(trade => {
+        const tradeDate = trade.date;
+        return tradeDate >= actualSevenDaysAgoDate && tradeDate <= endOfTodayFor7DayMetrics;
+    });
+    
+    const winningTradesActual7 = tradesActuallyLast7Days.filter(t => t.profit > 0);
+    const losingTradesActual7 = tradesActuallyLast7Days.filter(t => t.profit < 0);
+    setWinningTrades7DaysCount(winningTradesActual7.length);
+    setLosingTrades7DaysCount(losingTradesActual7.length);
 
-    const winningTrades7 = tradesLast7Days.filter(t => t.profit > 0);
-    const losingTrades7 = tradesLast7Days.filter(t => t.profit < 0);
-    setWinningTrades7DaysCount(winningTrades7.length);
-    setLosingTrades7DaysCount(losingTrades7.length);
-
-    if (tradesLast7Days.length > 0) {
-        setWinRate7Days((winningTrades7.length / tradesLast7Days.length) * 100);
+    if (tradesActuallyLast7Days.length > 0) {
+        setWinRate7Days((winningTradesActual7.length / tradesActuallyLast7Days.length) * 100);
     } else {
         setWinRate7Days(0);
     }
 
-    const totalWinAmount7 = winningTrades7.reduce((sum, t) => sum + t.profit, 0);
-    const totalLossAmount7 = losingTrades7.reduce((sum, t) => sum + Math.abs(t.profit), 0);
-    const avgWin7 = winningTrades7.length > 0 ? totalWinAmount7 / winningTrades7.length : 0;
-    const avgLoss7 = losingTrades7.length > 0 ? totalLossAmount7 / losingTrades7.length : 0;
+    const totalWinAmountActual7 = winningTradesActual7.reduce((sum, t) => sum + t.profit, 0);
+    const totalLossAmountActual7 = losingTradesActual7.reduce((sum, t) => sum + Math.abs(t.profit), 0);
+    const avgWinActual7 = winningTradesActual7.length > 0 ? totalWinAmountActual7 / winningTradesActual7.length : 0;
+    const avgLossActual7 = losingTradesActual7.length > 0 ? totalLossAmountActual7 / losingTradesActual7.length : 0;
     
-    if (avgLoss7 > 0) {
-        setAvgRiskReward7Days(`${(avgWin7 / avgLoss7).toFixed(2)}:1`);
-    } else if (avgWin7 > 0) {
+    if (avgLossActual7 > 0) {
+        setAvgRiskReward7Days(`${(avgWinActual7 / avgLossActual7).toFixed(2)}:1`);
+    } else if (avgWinActual7 > 0) {
         setAvgRiskReward7Days("Inf:1");
     } else {
         setAvgRiskReward7Days("N/A");
     }
 
+
+    // Weekly P/L Chart Data Logic (remains mostly the same)
     if (selectedDate && isValid(selectedDate)) {
         const tradesOnSelectedDay = allTrades
             .filter(trade => trade.date >= startOfDay(selectedDate) && trade.date <= endOfDay(selectedDate))
@@ -261,6 +266,7 @@ export default function DashboardPage() {
         }));
         setWeeklyPLChartData(chartDataForDay);
     } else {
+        const weekStartDate = startOfWeek(today, { locale: ptBR });
         const currentWeekDays = eachDayOfInterval({ start: weekStartDate, end: endOfWeek(today, { locale: ptBR }) });
         const newWeeklyPLData = currentWeekDays.map(dayDate => {
             const dayKey = format(dayDate, 'EEE', { locale: ptBR });
@@ -285,10 +291,9 @@ export default function DashboardPage() {
   }, [profitOrLossForPeriod, riskSettings]);
   
   useEffect(() => {
-    // Cleanup function to reset daily result when navigating away
     return () => {
       setDailyResult(null);
-      setIsLoadingDailyResult(true); // Reset to loading for next dashboard visit
+      setIsLoadingDailyResult(true); 
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -365,7 +370,7 @@ export default function DashboardPage() {
                   selected={selectedDate}
                   onSelect={(date) => {
                     setSelectedDate(date);
-                    if (!date) { // If cleared, reset header to today's P/L
+                    if (!date) { 
                         const today = new Date();
                         const startOfToday = startOfDay(today);
                         const endOfToday = endOfDay(today);
@@ -382,14 +387,13 @@ export default function DashboardPage() {
             </Popover>
             {selectedDate && <Button variant="ghost" onClick={() => {
                 setSelectedDate(undefined);
-                // When filter is cleared, reset header P/L to today's actual P/L
                 const today = new Date();
                 const startOfToday = startOfDay(today);
                 const endOfToday = endOfDay(today);
                 const tradesForToday = allTrades.filter(trade => trade.date >= startOfToday && trade.date <= endOfToday);
                 const plForToday = tradesForToday.reduce((sum, trade) => sum + trade.profit, 0);
                 setDailyResult(plForToday);
-                setIsLoadingDailyResult(isLoading); // Reflect main loading state
+                setIsLoadingDailyResult(isLoading); 
             }}>Limpar filtro</Button>}
         </div>
       </div>
@@ -507,7 +511,7 @@ export default function DashboardPage() {
         </Card>
       </div>
       
-      <div className="grid gap-6 md:grid-cols-2 mt-6"> {/* Changed to md:grid-cols-2 */}
+      <div className="grid gap-6 md:grid-cols-2 mt-6">
          <Card className="md:col-span-1 shadow-md hover:shadow-lg transition-shadow duration-300">
           <CardHeader>
             <CardTitle className="font-headline text-lg">Desempenho (Últimos 7 dias)</CardTitle>
@@ -586,3 +590,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
